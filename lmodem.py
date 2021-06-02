@@ -8,7 +8,6 @@ from .lsms import SMS
 
 import logging
 import threading
-import deduce_isp as ISP
 
 class Modem():
     details = {}
