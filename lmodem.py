@@ -3,7 +3,7 @@
 import subprocess
 from subprocess import Popen, PIPE
 
-# from models.libMMCLI_python.lsms import SMS 
+# from models.mmcli_python.lsms import SMS 
 from .lsms import SMS
 
 import logging
