@@ -1,7 +1,7 @@
 #!/bin/python
 import subprocess
 import re
-from modem import Modem 
+from .lmodem import Modem 
 
 class USSD():
     def __init__(self, modem):
