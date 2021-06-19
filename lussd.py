@@ -78,13 +78,10 @@ if __name__ == "__main__":
     try:
         respond = ussd.initiate( "*123#" )
         print(respond)
-
         respond = ussd.respond( "6" )
         print(respond)
-
         respond = ussd.respond( "4" )
         print(respond)
-
         print(ussd.status()[ussd.get("status")])
 
         ussd.cancel()

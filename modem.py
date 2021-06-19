@@ -13,10 +13,17 @@ class SMS():
 
     number=None
     text=None
+
     pdu_type=None
     state=None
     timestamp=None
     query_command=None
+
+    # required for sending
+    delivery_report=None
+    validity=None
+    data=None
+    _set=False
 
     @staticmethod
     def s_layer_parse(data):
@@ -60,6 +67,26 @@ class SMS():
             data=Modem.f_layer_parse(mmcli_output)
             self.__build_attributes(data)
 
+    def __create(self, number, text, delivery_report):
+        mmcli_create_sms = []
+        mmcli_create_sms += self.modem.query_command + ["--messaging-create-sms"]
+        mmcli_create_sms[-1] += f'=number={number},text="{text}"'
+        try: 
+            mmcli_output = subprocess.check_output(mmcli_create_sms, stderr=subprocess.STDOUT).decode('utf-8').replace('\n', '')
+
+        except subprocess.CalledProcessError as error:
+            print(traceback.format_exc())
+        else:
+            mmcli_output = mmcli_output.split(': ')
+            creation_status = mmcli_output[0]
+            sms_index = mmcli_output[1].split('/')[-1]
+            if not sms_index.isdigit():
+                raise Exception("error - sms index isn't an index:", sms_index)
+                return False
+            else:
+                self.index = sms_index
+        return True
+
     def __init__(self, modem=None, index=None):
         if modem is not None:
             self.modem = modem
@@ -79,6 +106,41 @@ class SMS():
             messages.append( sms )
         return messages
 
+    def set(self, number, text, delivery_report=None, validity=None, data=None):
+        self.number = number
+        self.text = text
+        self.delivery_report=delivery_report
+        self.validity=validity
+        self.data=data
+
+        if self.__create(number, text, delivery_report):
+            self._set=True
+            return True
+        return False
+
+    def is_set(self):
+        return self._set
+
+    def send(self):
+        if self.index is None:
+            raise Exception("failed to create sms - no index available")
+
+        mmcli_send = self.modem.query_command + ["-s", self.index, "--send", "--timeout=10"] 
+        message=None
+        status=None
+
+        try: 
+            mmcli_output = subprocess.check_output(mmcli_send, stderr=subprocess.STDOUT).decode('utf-8').replace('\n', '')
+
+        except subprocess.CalledProcessError as error:
+            returncode = error.returncode
+            err_output = error.output.decode('utf-8').replace('\n', '')
+            message=err_output
+            raise Exception(message)
+        else:
+            message=mmcli_output
+            return True
+        return False
 
 
 class USSD():
@@ -204,6 +266,11 @@ if __name__ == "__main__":
     print(f"- operator name: {modem.operator_name}")
 
     smsses = modem.get_sms_messages()
+    assert(modem.sms.set(number=sys.argv[2], text="Hello world") == True)
+    print(f"-\n sending:text - {modem.sms.text}")
+    print(f"- sending:number - {modem.sms.number}")
+    assert(modem.sms.send() == True)
+    
     for sms in smsses:
         print(f"\n- number: {sms.number}")
         print(f"- text: {sms.text}")
