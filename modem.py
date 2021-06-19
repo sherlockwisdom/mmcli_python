@@ -82,9 +82,23 @@ class SMS():
 
 
 class USSD():
+    modem=None
     def __init__(self, modem):
-        pass
+        self.modem = modem
 
+    def initiate(self, command):
+        ussd_command = self.modem.query_command + [f"--3gpp-ussd-initiate={command}"]
+        # print( ussd_command )
+        try: 
+            mmcli_output = subprocess.check_output(ussd_command, stderr=subprocess.STDOUT).decode('utf-8')
+        except subprocess.CalledProcessError as error:
+            # print(f"[stderr]>> return code[{error.returncode}], output[{error.output.decode('utf-8')}")
+            raise Exception(f"[stderr]>> return code[{error.returncode}], output[{error.output.decode('utf-8')}")
+        else:
+            # remote 'new reply from network:'
+            mmcli_output = mmcli_output.split(": ", 1)[1].split("'")[1]
+            # print( mmcli_output )
+            return mmcli_output
 
 class Modem():
     imei=None
