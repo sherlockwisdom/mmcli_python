@@ -101,11 +101,11 @@ class SMS():
     def __init__(self, modem=None, index=None):
         if modem is not None:
             self.modem = modem
-        elif index is not None:
+        if index is not None:
             self.index = index
             self.query_command = ["mmcli", "-Ks", self.index]
             self.__extract_message()
-        else:
+        elif(modem is None and index is None):
             raise Exception('modem or index needed to initialize sms')
 
     def get_messages(self):
@@ -289,6 +289,7 @@ if __name__ == "__main__":
     assert(modem.sms.delete() == True)
     
     smsses = modem.sms.get_messages()
+    print(smsses)
     for sms in smsses:
         print(f"\n- index: {sms.index}")
         print(f"- number: {sms.number}")
@@ -296,7 +297,7 @@ if __name__ == "__main__":
         print(f"- pdu-type: {sms.pdu_type}")
         print(f"- state: {sms.state}")
         print(f"- timestamp: {sms.timestamp}")
-        # assert(sms.delete() == True)
+        assert(sms.delete() == True)
 
     print('ussd initiate ', modem.ussd.initiate("*123#"))
     print('ussd respond ', modem.ussd.respond("6"))
