@@ -8,6 +8,12 @@ import traceback
 import subprocess
 from subprocess import Popen, PIPE
 
+def mmcli_exception_output(error):
+    returncode = error.returncode
+    err_output = error.output.decode('utf-8').replace('\n', '')
+    message=err_output
+    print(message)
+
 class SMS():
     modem=None
 
@@ -75,6 +81,7 @@ class SMS():
             mmcli_output = subprocess.check_output(mmcli_create_sms, stderr=subprocess.STDOUT).decode('utf-8').replace('\n', '')
 
         except subprocess.CalledProcessError as error:
+            mmcli_exception_output(error)
             print(traceback.format_exc())
         else:
             mmcli_output = mmcli_output.split(': ')
@@ -122,6 +129,7 @@ class SMS():
         return self._set
 
     def send(self):
+        print(f"- sending sms: {self.modem.index}")
         if self.index is None:
             raise Exception("failed to create sms - no index available")
 
@@ -133,12 +141,20 @@ class SMS():
             mmcli_output = subprocess.check_output(mmcli_send, stderr=subprocess.STDOUT).decode('utf-8').replace('\n', '')
 
         except subprocess.CalledProcessError as error:
-            returncode = error.returncode
-            err_output = error.output.decode('utf-8').replace('\n', '')
-            message=err_output
-            raise Exception(message)
+            mmcli_exception_output(error)
         else:
-            message=mmcli_output
+            return True
+        return False
+
+    def delete(self):
+        print(f"- deleting sms: {self.modem.index}")
+        mmcli_delete_sms = self.modem.query_command 
+        mmcli_delete_sms += [f"--messaging-delete-sms={self.index}"] 
+        try: 
+           mmcli_output = subprocess.check_output(mmcli_delete_sms, stderr=subprocess.STDOUT).decode('utf-8').replace('\n', '')
+        except subprocess.CalledProcessError as error:
+            mmcli_exception_output(error)
+        else:
             return True
         return False
 
@@ -270,6 +286,7 @@ if __name__ == "__main__":
     print(f"-\n sending:text - {modem.sms.text}")
     print(f"- sending:number - {modem.sms.number}")
     assert(modem.sms.send() == True)
+    assert(modem.sms.delete() == True)
     
     for sms in smsses:
         print(f"\n- number: {sms.number}")
