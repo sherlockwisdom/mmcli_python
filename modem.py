@@ -258,16 +258,25 @@ class Modem():
 
     # public methods
     def __init__(self, index):
-        self.query_command = ["mmcli", f"-Km", index]
-        self.index = index
-        self.refresh()
+        try:
+            self.query_command = ["mmcli", f"-Km", index]
+            self.index = index
+            self.refresh()
 
-        self.sms = SMS(self)
-        self.ussd = USSD(self)
+            self.sms = SMS(self)
+            self.ussd = USSD(self)
+        except Exception as error:
+            print(traceback.format_exc())
+            # print(error)
+        finally:
+            print("modem instantiation failed...")
 
     def refresh(self):
-        data = Modem.f_layer_parse(subprocess.check_output(self.query_command, stderr=subprocess.STDOUT).decode('utf-8'))
-        self.__build_attributes(data)
+        try:
+            data = Modem.f_layer_parse(subprocess.check_output(self.query_command, stderr=subprocess.STDOUT).decode('utf-8'))
+            self.__build_attributes(data)
+        except subprocess.CalledProcessError as error:
+            raise Exception(f"execution failed index={self.index} returncode={error.returncode} std(out/err)={error.stderr}")
 
 if __name__ == "__main__":
     import sys
