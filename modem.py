@@ -52,7 +52,7 @@ class Modem():
             try: 
                 mmcli_output = subprocess.check_output(sms_list, stderr=subprocess.STDOUT).decode('utf-8')
             except subprocess.CalledProcessError as error:
-                print(traceback.format_exc())
+                raise Exception(f"execution failed cmd={error.cmd} index={cls.index} returncode={error.returncode} stderr={error.stderr} stdout={error.stdout}")
             else:
                 data = Modem.s_layer_parse(mmcli_output)
             return data
@@ -184,7 +184,7 @@ class Modem():
         def respond(cls, command):
             ussd_command = cls.modem.query_command + [f"--3gpp-ussd-respond={command}"]
             try: 
-                mmcli_output = subprocess.check_output(ussd_command, stderr=subprocess.STDOUT).decode('utf-8')
+                mmcli_output = subprocess.check_output(ussd_command, stderr=subprocess.STDOUT, shell=True).decode('utf-8')
             except subprocess.CalledProcessError as error:
                 cls.modem.ussd.cancel()
                 raise Exception(f"execution failed cmd={error.cmd} index={cls.modem.index} returncode={error.returncode} stderr={error.stderr} stdout={error.stdout}")
@@ -298,15 +298,28 @@ class Modem():
             data = Modem.f_layer_parse(subprocess.check_output(self.query_command, stderr=subprocess.STDOUT).decode('utf-8'))
             self.__build_attributes(data)
         except subprocess.CalledProcessError as error:
-            raise Exception(f"execution failed cmd={error.cmd} index={self.index} returncode={error.returncode} std(out/err)={error.stderr}")
+            raise Exception(f"execution failed cmd={error.cmd} index={cls.index} returncode={error.returncode} stderr={error.stderr} stdout={error.stdout}")
     
     def toggle(self):
         try:
-            query_command = self.query_command + ['-d', '&&'] + self.query_command + ['-e']
-            data = Modem.f_layer_parse(subprocess.check_output(query_command, stderr=subprocess.STDOUT).decode('utf-8'))
-            self.__build_attributes(data)
+            # query_command = self.query_command + ['-d', '&&'] + self.query_command + ['-e']
+            query_command = self.query_command + ['-d']
+            mmcli_output = subprocess.check_output(query_command, stderr=subprocess.STDOUT).decode('utf-8')
+            print(mmcli_output)
+
+            query_command = self.query_command + ['-e']
+            mmcli_output = subprocess.check_output(query_command, stderr=subprocess.STDOUT).decode('utf-8')
+            print(mmcli_output)
         except subprocess.CalledProcessError as error:
-            raise Exception(f"execution failed cmd={error.cmd} index={self.index} returncode={error.returncode} std(out/err)={error.stderr}")
+            raise Exception(f"execution failed cmd={error.cmd} index={self.index} returncode={error.returncode} stderr={error.stderr} stdout={error.stdout}")
+
+    def reset(self):
+        try:
+            # query_command = self.query_command + ['-d', '&&'] + self.query_command + ['-e']
+            query_command = self.query_command + ['-r']
+            mmcli_output = subprocess.check_output(query_command, stderr=subprocess.STDOUT).decode('utf-8')
+        except subprocess.CalledProcessError as error:
+            raise Exception(f"execution failed cmd={error.cmd} index={self.index} returncode={error.returncode} stderr={error.stderr} stdout={error.stdout}")
 
 
 if __name__ == "__main__":
@@ -352,6 +365,7 @@ if __name__ == "__main__":
     try:
         # print('ussd initiate ', modem.ussd.initiate("*158*99#"))
         modem.toggle()
+        # modem.reset()
         print('ussd initiate ', modem.USSD.initiate("*155#"))
     except Exception as error:
         print(traceback.format_exc())
