@@ -166,10 +166,10 @@ class Modem():
             cls.modem = modem
 
         @classmethod
-        def initiate(cls, command):
+        def initiate(cls, command, timeout=10):
             query_command = cls.modem.query_command
             query_command[1] = query_command[1].replace('K', '')
-            ussd_command = query_command + [f"--3gpp-ussd-initiate={command}"]
+            ussd_command = query_command + [f'--3gpp-ussd-initiate={command}', f'--timeout={timeout}']
             try: 
                 mmcli_output = subprocess.check_output(ussd_command, stderr=subprocess.STDOUT).decode('utf-8')
             except subprocess.CalledProcessError as error:
@@ -299,6 +299,15 @@ class Modem():
             self.__build_attributes(data)
         except subprocess.CalledProcessError as error:
             raise Exception(f"execution failed cmd={error.cmd} index={self.index} returncode={error.returncode} std(out/err)={error.stderr}")
+    
+    def toggle(self):
+        try:
+            query_command = self.query_command + ['-d', '&&'] + self.query_command + ['-e']
+            data = Modem.f_layer_parse(subprocess.check_output(query_command, stderr=subprocess.STDOUT).decode('utf-8'))
+            self.__build_attributes(data)
+        except subprocess.CalledProcessError as error:
+            raise Exception(f"execution failed cmd={error.cmd} index={self.index} returncode={error.returncode} std(out/err)={error.stderr}")
+
 
 if __name__ == "__main__":
     import sys
@@ -335,9 +344,14 @@ if __name__ == "__main__":
             # print(traceback.format_exc())
             print(error)
 
+    ''' observations:
+    - for some reason ussd fails after SMS message has been sent
+    - without sending sms message, ussd happens.... why??
+    '''
 
     try:
         # print('ussd initiate ', modem.ussd.initiate("*158*99#"))
+        modem.toggle()
         print('ussd initiate ', modem.USSD.initiate("*155#"))
     except Exception as error:
         print(traceback.format_exc())
