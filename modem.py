@@ -178,7 +178,8 @@ class USSD():
             mmcli_output = subprocess.check_output(ussd_command, stderr=subprocess.STDOUT, encoding='utf-8')
         except subprocess.CalledProcessError as error:
             # print(traceback.format_exc())
-            raise Exception(f"execution failed cmd={error.cmd} index={modem.index} returncode={error.returncode} stderr={error.stderr} stdout={error.stdout}")
+            self.modem.ussd.cancel()
+            raise Exception(f"execution failed cmd={error.cmd} index={self.modem.index} returncode={error.returncode} stderr={error.stderr} stdout={error.stdout}")
         else:
             mmcli_output = mmcli_output.split(": ", 1)[1].split("'")[1]
             return mmcli_output
@@ -188,7 +189,7 @@ class USSD():
         try: 
             mmcli_output = subprocess.check_output(ussd_command, stderr=subprocess.STDOUT).decode('utf-8')
         except subprocess.CalledProcessError as error:
-            raise Exception(f"execution failed cmd={error.cmd} index={modem.index} returncode={error.returncode} stderr={error.stderr} stdout={error.stdout}")
+            raise Exception(f"execution failed cmd={error.cmd} index={self.modem.index} returncode={error.returncode} stderr={error.stderr} stdout={error.stdout}")
         else:
             mmcli_output = mmcli_output.split(": '", 1)[1][:-1]
             return mmcli_output
@@ -198,7 +199,7 @@ class USSD():
         try: 
             mmcli_output = subprocess.check_output(ussd_command, stderr=subprocess.STDOUT).decode('utf-8')
         except subprocess.CalledProcessError as error:
-            raise Exception(f"execution failed cmd={error.cmd} index={modem.index} returncode={error.returncode} stderr={error.stderr} stdout={error.stdout}")
+            raise Exception(f"execution failed cmd={error.cmd} index={self.modem.index} returncode={error.returncode} stderr={error.stderr} stdout={error.stdout}")
         else:
             return True
         
@@ -210,7 +211,7 @@ class USSD():
         try: 
             mmcli_output = subprocess.check_output(ussd_command, stderr=subprocess.STDOUT).decode('utf-8')
         except subprocess.CalledProcessError as error:
-            raise Exception(f"execution failed cmd={error.cmd} index={modem.index} returncode={error.returncode} stderr={error.stderr} stdout={error.stdout}")
+            raise Exception(f"execution failed cmd={error.cmd} index={self.modem.index} returncode={error.returncode} stderr={error.stderr} stdout={error.stdout}")
         else:
             mmcli_output = mmcli_output.split('\n')
             s_details = {}
@@ -330,6 +331,5 @@ if __name__ == "__main__":
         print('ussd initiate ', modem.ussd.initiate("*155#"))
     except Exception as error:
         print(traceback.format_exc())
-        print('ussd cancel ', modem.ussd.cancel())
     # print('ussd respond ', modem.ussd.respond("6"))
     # print('ussd respond ', modem.ussd.respond("4"))
