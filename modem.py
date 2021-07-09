@@ -143,7 +143,8 @@ class SMS():
             mmcli_output = subprocess.check_output(mmcli_send, stderr=subprocess.STDOUT).decode('utf-8').replace('\n', '')
 
         except subprocess.CalledProcessError as error:
-            mmcli_exception_output(error)
+            # mmcli_exception_output(error)
+            raise Exception(error)
         else:
             return True
         return False
@@ -156,7 +157,8 @@ class SMS():
            # mmcli_output = subprocess.check_output(mmcli_delete_sms, stderr=subprocess.STDOUT).decode('utf-8').replace('\n', '')
            mmcli_output = subprocess.check_output(command, stderr=subprocess.STDOUT).decode('utf-8').replace('\n', '')
         except subprocess.CalledProcessError as error:
-            mmcli_exception_output(error)
+            # mmcli_exception_output(error)
+            raise Exception(error)
         else:
             return True
         return False
@@ -231,6 +233,15 @@ class Modem():
     # sub-classes
     sms=None
     ussd=None
+
+    @staticmethod
+    def list():
+        try:
+            query_command=["mmcli", "-KL"]
+            data = Modem.f_layer_parse(subprocess.check_output(query_command, stderr=subprocess.STDOUT).decode('utf-8'))
+            return [index[1].split('/')[-1] for index in f_layer_parse(data)]
+        except subprocess.CalledProcessError as error:
+            raise Exception(f"execution failed cmd={error.cmd} index={self.index} returncode={error.returncode} std(out/err)={error.stderr}")
 
     # private methods
     @staticmethod
