@@ -34,18 +34,6 @@ class SMS():
     data=None
     _set=False
 
-    @staticmethod
-    def s_layer_parse(data):
-        data = data.split('\n')
-        n_modems = int(data[0].split(': ')[1])
-        sms = []
-        for i in range(1, (n_modems + 1)):
-            sms_index = data[i].split('/')[-1]
-            if not sms_index.isdigit():
-                continue
-            sms.append( sms_index )
-
-        return sms
 
     # private method
     def __list(self):
@@ -57,7 +45,7 @@ class SMS():
         except subprocess.CalledProcessError as error:
             print(traceback.format_exc())
         else:
-            data = SMS.s_layer_parse(mmcli_output)
+            data = Modem.s_layer_parse(mmcli_output)
         return data
 
     def __build_attributes(self, data):
@@ -174,8 +162,7 @@ class USSD():
         query_command[1] = query_command[1].replace('K', '')
         ussd_command = query_command + [f"--3gpp-ussd-initiate={command}"]
         try: 
-            # mmcli_output = subprocess.check_output(ussd_command, stderr=subprocess.STDOUT).decode('utf-8')
-            mmcli_output = subprocess.check_output(ussd_command, stderr=subprocess.STDOUT, encoding='utf-8')
+            mmcli_output = subprocess.check_output(ussd_command, stderr=subprocess.STDOUT).decode('utf-8')
         except subprocess.CalledProcessError as error:
             # print(traceback.format_exc())
             self.modem.ussd.cancel()
@@ -189,6 +176,7 @@ class USSD():
         try: 
             mmcli_output = subprocess.check_output(ussd_command, stderr=subprocess.STDOUT).decode('utf-8')
         except subprocess.CalledProcessError as error:
+            self.modem.ussd.cancel()
             raise Exception(f"execution failed cmd={error.cmd} index={self.modem.index} returncode={error.returncode} stderr={error.stderr} stdout={error.stdout}")
         else:
             mmcli_output = mmcli_output.split(": '", 1)[1][:-1]
@@ -243,8 +231,10 @@ class Modem():
     def list():
         try:
             query_command=["mmcli", "-KL"]
-            data = Modem.f_layer_parse(subprocess.check_output(query_command, stderr=subprocess.STDOUT).decode('utf-8'))
-            return [index[1].split('/')[-1] for index in f_layer_parse(data)]
+            # data = Modem.s_layer_parse(subprocess.check_output(query_command, stderr=subprocess.STDOUT).decode('utf-8'))
+            # print(data)
+            return [index for index in Modem.s_layer_parse(subprocess.check_output(query_command, stderr=subprocess.STDOUT).decode('utf-8'))]
+            # return [index[1].split('/')[-1] for index in Modem.f_layer_parse(data)]
         except subprocess.CalledProcessError as error:
             raise Exception(f"execution failed cmd={error.cmd} index={self.index} returncode={error.returncode} std(out/err)={error.stderr}")
 
@@ -262,6 +252,19 @@ class Modem():
             details[key] = m_detail[1]
 
         return details
+
+    @staticmethod
+    def s_layer_parse(data):
+        data = data.split('\n')
+        n_modems = int(data[0].split(': ')[1])
+        sms = []
+        for i in range(1, (n_modems + 1)):
+            sms_index = data[i].split('/')[-1]
+            if not sms_index.isdigit():
+                continue
+            sms.append( sms_index )
+
+        return sms
 
     def __build_attributes(self, data):
         self.imei = data["modem.3gpp.imei"]
