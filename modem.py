@@ -10,6 +10,16 @@ from subprocess import Popen, PIPE
 
 import enum
 class Modem():
+    imei=None
+    model=None
+    index=None
+    state=None
+    dbus_path=None
+    power_state=None
+    operator_code=None
+    operator_name=None
+    query_command=None
+
     class IDENTIFIERS(enum.Enum):
         IMEI=1
         INDEX=2
@@ -35,7 +45,7 @@ class Modem():
 
         # private method
         @classmethod
-        def __list(cls):
+        def list(cls):
             data=None
             sms_list = []
             sms_list += cls.modem.query_command + ["--messaging-list-sms"]
@@ -88,6 +98,7 @@ class Modem():
                     cls.index = sms_index
             return True
 
+        # SMS:__init__
         @classmethod
         def __init__(cls, modem=None, index=None):
             if modem is not None:
@@ -100,16 +111,6 @@ class Modem():
                 raise Exception('modem or index needed to initialize sms')
 
         @classmethod
-        def get_messages(cls):
-            data = cls.__list()
-            print(data)
-            messages = []
-            for index in data:
-                sms = SMS(cls.modem, index=index)
-                messages.append( sms )
-            return messages
-
-        @classmethod
         def set(cls, number, text, delivery_report=None, validity=None, data=None):
             cls.number = number
             cls.text = text
@@ -119,42 +120,40 @@ class Modem():
 
             if cls.__create(number, text, delivery_report):
                 cls._set=True
-                return True
-            return False
+            
+            return cls
 
         @classmethod
         def is_set(cls):
             return cls._set
 
         @classmethod
-        def send(cls):
+        def send(cls, timeout=20):
             print(f"\n- sending sms: {cls.index}")
             if cls.index is None:
                 raise Exception("failed to create sms - no index available")
 
-            mmcli_send = cls.modem.query_command + ["-s", cls.index, "--send", "--timeout=20"] 
-
+            mmcli_send = cls.modem.query_command + ["-s", cls.index, "--send", f"--timeout={timeout}"] 
             try: 
                 mmcli_output = subprocess.check_output(mmcli_send, stderr=subprocess.STDOUT).decode('utf-8').replace('\n', '')
-
             except subprocess.CalledProcessError as error:
                 # mmcli_exception_output(error)
-                raise Exception(f"execution failed cmd={error.cmd} index={cls.index} returncode={error.returncode} std(out/err)={error.stderr}")
+                raise Exception(f"execution failed cmd={error.cmd} index={cls.index} returncode={error.returncode} stderr={error.stderr} stdout={error.stdout}")
             else:
                 return True
             return False
 
         @classmethod
-        def delete(cls):
-            print(f"\n- deleting sms: {cls.index}")
+        def delete(cls, index):
+            print(f"\n- deleting sms: {index}")
             command = []
-            command = cls.modem.query_command + [f"--messaging-delete-sms={cls.index}"] 
+            command = cls.modem.query_command + [f"--messaging-delete-sms={index}"] 
             try: 
                # mmcli_output = subprocess.check_output(mmcli_delete_sms, stderr=subprocess.STDOUT).decode('utf-8').replace('\n', '')
                mmcli_output = subprocess.check_output(command, stderr=subprocess.STDOUT).decode('utf-8').replace('\n', '')
             except subprocess.CalledProcessError as error:
                 # mmcli_exception_output(error)
-                raise Exception(error)
+                raise Exception(f"execution failed cmd={error.cmd} index={cls.index} returncode={error.returncode} stderr={error.stderr} stdout={error.stdout}")
             else:
                 return True
             return False
@@ -175,7 +174,7 @@ class Modem():
                 mmcli_output = subprocess.check_output(ussd_command, stderr=subprocess.STDOUT).decode('utf-8')
             except subprocess.CalledProcessError as error:
                 # print(traceback.format_exc())
-                cls.modem.ussd.cancel()
+                cls.modem.USSD.cancel()
                 raise Exception(f"execution failed cmd={error.cmd} index={cls.modem.index} returncode={error.returncode} stderr={error.stderr} stdout={error.stdout}")
             else:
                 mmcli_output = mmcli_output.split(": ", 1)[1].split("'")[1]
@@ -225,22 +224,6 @@ class Modem():
 
                 return s_details
 
-
-
-
-    imei=None
-    model=None
-    index=None
-    state=None
-    dbus_path=None
-    power_state=None
-    operator_code=None
-    operator_name=None
-    query_command=None
-
-    # sub-classes
-    # sms=None
-    # ussd=None
 
     @staticmethod
     def list():
@@ -295,7 +278,7 @@ class Modem():
         self.operator_code = data["modem.3gpp.operator-code"]
         self.operator_name = data["modem.3gpp.operator-name"]
 
-    # public methods
+    # MODEM:__init__
     def __init__(self, index):
         try:
             self.query_command = ["mmcli", f"-Km", index]
@@ -329,25 +312,29 @@ if __name__ == "__main__":
     print(f"- operator code: {modem.operator_code}")
     print(f"- operator name: {modem.operator_name}")
 
-    '''
-    assert(modem.sms.set(number=sys.argv[2], text="Hello world") == True)
-    print(f"\n- sending:text - {modem.sms.text}")
-    print(f"- sending:number - {modem.sms.number}")
-    print(f"- sending:index - {modem.sms.index}")
-    assert(modem.sms.send() == True)
-    assert(modem.sms.delete() == True)
-    '''
+    try:
+        modem.SMS.set(number=sys.argv[2], text="Hello world")
+        print(f"\n- sending:text - {modem.SMS.text}")
+        print(f"- sending:number - {modem.SMS.number}")
+        print(f"- sending:index - {modem.SMS.index}")
+        # assert(modem.SMS.send() == True)
+        # assert(modem.SMS.delete() == True)
+        modem.SMS.send()
+    except Exception as error:
+        print(error)
     
-    smsses = modem.SMS.get_messages()
-    print(smsses)
-    for sms in smsses:
-        print(f"\n- index: {sms.index}")
-        print(f"- number: {sms.number}")
-        print(f"- text: {sms.text}")
-        print(f"- pdu-type: {sms.pdu_type}")
-        print(f"- state: {sms.state}")
-        print(f"- timestamp: {sms.timestamp}")
-        assert(sms.delete() == True)
+    indexes = modem.SMS.list()
+    print('found sms\'', indexes)
+
+    for index in indexes:
+        try:
+            # sms.delete()
+            print(index)
+            modem.SMS.delete(index=index)
+        except Exception as error:
+            # print(traceback.format_exc())
+            print(error)
+
 
     try:
         # print('ussd initiate ', modem.ussd.initiate("*158*99#"))
