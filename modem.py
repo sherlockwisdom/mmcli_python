@@ -137,14 +137,14 @@ class SMS():
         if self.index is None:
             raise Exception("failed to create sms - no index available")
 
-        mmcli_send = self.modem.query_command + ["-s", self.index, "--send", "--timeout=10"] 
+        mmcli_send = self.modem.query_command + ["-s", self.index, "--send", "--timeout=20"] 
 
         try: 
             mmcli_output = subprocess.check_output(mmcli_send, stderr=subprocess.STDOUT).decode('utf-8').replace('\n', '')
 
         except subprocess.CalledProcessError as error:
             # mmcli_exception_output(error)
-            raise Exception(error)
+            raise Exception(f"execution failed cmd={error.cmd} index={self.index} returncode={error.returncode} std(out/err)={error.stderr}")
         else:
             return True
         return False
@@ -170,11 +170,15 @@ class USSD():
         self.modem = modem
 
     def initiate(self, command):
-        ussd_command = self.modem.query_command + [f"--3gpp-ussd-initiate={command}"]
+        query_command = self.modem.query_command
+        query_command[1] = query_command[1].replace('K', '')
+        ussd_command = query_command + [f"--3gpp-ussd-initiate={command}"]
         try: 
-            mmcli_output = subprocess.check_output(ussd_command, stderr=subprocess.STDOUT).decode('utf-8')
+            # mmcli_output = subprocess.check_output(ussd_command, stderr=subprocess.STDOUT).decode('utf-8')
+            mmcli_output = subprocess.check_output(ussd_command, stderr=subprocess.STDOUT, encoding='utf-8')
         except subprocess.CalledProcessError as error:
-            print(traceback.format_exc())
+            # print(traceback.format_exc())
+            raise Exception(f"execution failed cmd={error.cmd} index={modem.index} returncode={error.returncode} stderr={error.stderr} stdout={error.stdout}")
         else:
             mmcli_output = mmcli_output.split(": ", 1)[1].split("'")[1]
             return mmcli_output
@@ -184,7 +188,7 @@ class USSD():
         try: 
             mmcli_output = subprocess.check_output(ussd_command, stderr=subprocess.STDOUT).decode('utf-8')
         except subprocess.CalledProcessError as error:
-            print(traceback.format_exc())
+            raise Exception(f"execution failed cmd={error.cmd} index={modem.index} returncode={error.returncode} stderr={error.stderr} stdout={error.stdout}")
         else:
             mmcli_output = mmcli_output.split(": '", 1)[1][:-1]
             return mmcli_output
@@ -194,7 +198,7 @@ class USSD():
         try: 
             mmcli_output = subprocess.check_output(ussd_command, stderr=subprocess.STDOUT).decode('utf-8')
         except subprocess.CalledProcessError as error:
-            print(traceback.format_exc())
+            raise Exception(f"execution failed cmd={error.cmd} index={modem.index} returncode={error.returncode} stderr={error.stderr} stdout={error.stdout}")
         else:
             return True
         
@@ -206,7 +210,7 @@ class USSD():
         try: 
             mmcli_output = subprocess.check_output(ussd_command, stderr=subprocess.STDOUT).decode('utf-8')
         except subprocess.CalledProcessError as error:
-            print(traceback.format_exc())
+            raise Exception(f"execution failed cmd={error.cmd} index={modem.index} returncode={error.returncode} stderr={error.stderr} stdout={error.stdout}")
         else:
             mmcli_output = mmcli_output.split('\n')
             s_details = {}
@@ -301,12 +305,14 @@ if __name__ == "__main__":
     print(f"- operator code: {modem.operator_code}")
     print(f"- operator name: {modem.operator_name}")
 
+    '''
     assert(modem.sms.set(number=sys.argv[2], text="Hello world") == True)
     print(f"\n- sending:text - {modem.sms.text}")
     print(f"- sending:number - {modem.sms.number}")
     print(f"- sending:index - {modem.sms.index}")
     assert(modem.sms.send() == True)
     assert(modem.sms.delete() == True)
+    '''
     
     smsses = modem.sms.get_messages()
     print(smsses)
@@ -319,6 +325,11 @@ if __name__ == "__main__":
         print(f"- timestamp: {sms.timestamp}")
         assert(sms.delete() == True)
 
-    print('ussd initiate ', modem.ussd.initiate("*123#"))
-    print('ussd respond ', modem.ussd.respond("6"))
-    print('ussd respond ', modem.ussd.respond("4"))
+    try:
+        # print('ussd initiate ', modem.ussd.initiate("*158*99#"))
+        print('ussd initiate ', modem.ussd.initiate("*155#"))
+    except Exception as error:
+        print(traceback.format_exc())
+        print('ussd cancel ', modem.ussd.cancel())
+    # print('ussd respond ', modem.ussd.respond("6"))
+    # print('ussd respond ', modem.ussd.respond("4"))
