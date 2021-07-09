@@ -212,7 +212,12 @@ class USSD():
 
             return s_details
 
+import enum
 class Modem():
+    class IDENTIFIERS(enum.Enum):
+        IMEI=1
+        INDEX=2
+
     imei=None
     model=None
     index=None
@@ -267,6 +272,11 @@ class Modem():
         return sms
 
     def __build_attributes(self, data):
+        '''look into
+        - modem.generic.device-identifier
+        - modem.generic.equipment-identifier
+        '''
+
         self.imei = data["modem.3gpp.imei"]
         self.state = data["modem.generic.state"]
         self.model = data["modem.generic.model"]
@@ -285,10 +295,8 @@ class Modem():
             self.sms = SMS(self)
             self.ussd = USSD(self)
         except Exception as error:
-            # print(traceback.format_exc())
-            print(error)
-        finally:
             print("modem instantiation failed...")
+            print(traceback.format_exc())
 
     def refresh(self):
         try:
