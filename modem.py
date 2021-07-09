@@ -8,215 +8,225 @@ import traceback
 import subprocess
 from subprocess import Popen, PIPE
 
-def mmcli_exception_output(error):
-    message=None
-    status=None
-    returncode = error.returncode
-    err_output = error.output.decode('utf-8').replace('\n', '')
-    message=err_output
-    print(message)
-
-class SMS():
-    index=None
-    modem=None
-
-    number=None
-    text=None
-
-    pdu_type=None
-    state=None
-    timestamp=None
-    query_command=None
-
-    # required for sending
-    delivery_report=None
-    validity=None
-    data=None
-    _set=False
-
-
-    # private method
-    def __list(self):
-        data=None
-        sms_list = []
-        sms_list += self.modem.query_command + ["--messaging-list-sms"]
-        try: 
-            mmcli_output = subprocess.check_output(sms_list, stderr=subprocess.STDOUT).decode('utf-8')
-        except subprocess.CalledProcessError as error:
-            print(traceback.format_exc())
-        else:
-            data = Modem.s_layer_parse(mmcli_output)
-        return data
-
-    def __build_attributes(self, data):
-        self.text = data["sms.content.text"]
-        self.state = data["sms.properties.state"]
-        self.number = data["sms.content.number"]
-        self.timestamp = data["sms.properties.timestamp"]
-        self.pdu_type = data["sms.properties.pdu-type"]
-
-    def __extract_message(self):
-        try: 
-            mmcli_output = subprocess.check_output(self.query_command, stderr=subprocess.STDOUT).decode('utf-8')
-        except subprocess.CalledProcessError as error:
-            print(traceback.format_exc())
-        else:
-            data=Modem.f_layer_parse(mmcli_output)
-            self.__build_attributes(data)
-
-    def __create(self, number, text, delivery_report):
-        mmcli_create_sms = []
-        mmcli_create_sms += self.modem.query_command + ["--messaging-create-sms"]
-        mmcli_create_sms[-1] += f'=number={number},text="{text}"'
-        try: 
-            mmcli_output = subprocess.check_output(mmcli_create_sms, stderr=subprocess.STDOUT).decode('utf-8').replace('\n', '')
-
-        except subprocess.CalledProcessError as error:
-            mmcli_exception_output(error)
-            print(traceback.format_exc())
-        else:
-            # print(mmcli_output)
-            mmcli_output = mmcli_output.split(': ')
-            creation_status = mmcli_output[0]
-            sms_index = mmcli_output[1].split('/')[-1]
-            if not sms_index.isdigit():
-                raise Exception("error - sms index isn't an index:", sms_index)
-                return False
-            else:
-                self.index = sms_index
-        return True
-
-    def __init__(self, modem=None, index=None):
-        if modem is not None:
-            self.modem = modem
-        if index is not None:
-            self.index = index
-            self.query_command = ["mmcli", "-Ks", self.index]
-            self.__extract_message()
-        elif(modem is None and index is None):
-            raise Exception('modem or index needed to initialize sms')
-
-    def get_messages(self):
-        data = self.__list()
-        print(data)
-        messages = []
-        for index in data:
-            sms = SMS(self.modem, index=index)
-            messages.append( sms )
-        return messages
-
-    def set(self, number, text, delivery_report=None, validity=None, data=None):
-        self.number = number
-        self.text = text
-        self.delivery_report=delivery_report
-        self.validity=validity
-        self.data=data
-
-        if self.__create(number, text, delivery_report):
-            self._set=True
-            return True
-        return False
-
-    def is_set(self):
-        return self._set
-
-    def send(self):
-        print(f"\n- sending sms: {self.index}")
-        if self.index is None:
-            raise Exception("failed to create sms - no index available")
-
-        mmcli_send = self.modem.query_command + ["-s", self.index, "--send", "--timeout=20"] 
-
-        try: 
-            mmcli_output = subprocess.check_output(mmcli_send, stderr=subprocess.STDOUT).decode('utf-8').replace('\n', '')
-
-        except subprocess.CalledProcessError as error:
-            # mmcli_exception_output(error)
-            raise Exception(f"execution failed cmd={error.cmd} index={self.index} returncode={error.returncode} std(out/err)={error.stderr}")
-        else:
-            return True
-        return False
-
-    def delete(self):
-        print(f"\n- deleting sms: {self.index}")
-        command = []
-        command = self.modem.query_command + [f"--messaging-delete-sms={self.index}"] 
-        try: 
-           # mmcli_output = subprocess.check_output(mmcli_delete_sms, stderr=subprocess.STDOUT).decode('utf-8').replace('\n', '')
-           mmcli_output = subprocess.check_output(command, stderr=subprocess.STDOUT).decode('utf-8').replace('\n', '')
-        except subprocess.CalledProcessError as error:
-            # mmcli_exception_output(error)
-            raise Exception(error)
-        else:
-            return True
-        return False
-
-
-class USSD():
-    modem=None
-    def __init__(self, modem):
-        self.modem = modem
-
-    def initiate(self, command):
-        query_command = self.modem.query_command
-        query_command[1] = query_command[1].replace('K', '')
-        ussd_command = query_command + [f"--3gpp-ussd-initiate={command}"]
-        try: 
-            mmcli_output = subprocess.check_output(ussd_command, stderr=subprocess.STDOUT).decode('utf-8')
-        except subprocess.CalledProcessError as error:
-            # print(traceback.format_exc())
-            self.modem.ussd.cancel()
-            raise Exception(f"execution failed cmd={error.cmd} index={self.modem.index} returncode={error.returncode} stderr={error.stderr} stdout={error.stdout}")
-        else:
-            mmcli_output = mmcli_output.split(": ", 1)[1].split("'")[1]
-            return mmcli_output
-
-    def respond(self, command):
-        ussd_command = self.modem.query_command + [f"--3gpp-ussd-respond={command}"]
-        try: 
-            mmcli_output = subprocess.check_output(ussd_command, stderr=subprocess.STDOUT).decode('utf-8')
-        except subprocess.CalledProcessError as error:
-            self.modem.ussd.cancel()
-            raise Exception(f"execution failed cmd={error.cmd} index={self.modem.index} returncode={error.returncode} stderr={error.stderr} stdout={error.stdout}")
-        else:
-            mmcli_output = mmcli_output.split(": '", 1)[1][:-1]
-            return mmcli_output
-
-    def cancel(self):
-        ussd_command = self.modem.query_command + [f"--3gpp-ussd-cancel"]
-        try: 
-            mmcli_output = subprocess.check_output(ussd_command, stderr=subprocess.STDOUT).decode('utf-8')
-        except subprocess.CalledProcessError as error:
-            raise Exception(f"execution failed cmd={error.cmd} index={self.modem.index} returncode={error.returncode} stderr={error.stderr} stdout={error.stdout}")
-        else:
-            return True
-        
-        return False
-
-    def status(self):
-        ussd_command = self.modem.query_command + [f"--3gpp-ussd-status"]
-
-        try: 
-            mmcli_output = subprocess.check_output(ussd_command, stderr=subprocess.STDOUT).decode('utf-8')
-        except subprocess.CalledProcessError as error:
-            raise Exception(f"execution failed cmd={error.cmd} index={self.modem.index} returncode={error.returncode} stderr={error.stderr} stdout={error.stdout}")
-        else:
-            mmcli_output = mmcli_output.split('\n')
-            s_details = {}
-            for output in mmcli_output:
-                s_detail = output.split(': ')
-                if len(s_detail) < 2:
-                    continue
-                key = s_detail[0].replace(' ', '')
-                s_details[key] = s_detail[1]
-
-            return s_details
-
 import enum
 class Modem():
     class IDENTIFIERS(enum.Enum):
         IMEI=1
         INDEX=2
+
+    class SMS():
+        index=None
+        modem=None
+
+        number=None
+        text=None
+
+        pdu_type=None
+        state=None
+        timestamp=None
+        query_command=None
+
+        # required for sending
+        delivery_report=None
+        validity=None
+        data=None
+        _set=False
+
+
+        # private method
+        @classmethod
+        def __list(cls):
+            data=None
+            sms_list = []
+            sms_list += cls.modem.query_command + ["--messaging-list-sms"]
+            try: 
+                mmcli_output = subprocess.check_output(sms_list, stderr=subprocess.STDOUT).decode('utf-8')
+            except subprocess.CalledProcessError as error:
+                print(traceback.format_exc())
+            else:
+                data = Modem.s_layer_parse(mmcli_output)
+            return data
+
+        @classmethod
+        def __build_attributes(cls, data):
+            cls.text = data["sms.content.text"]
+            cls.state = data["sms.properties.state"]
+            cls.number = data["sms.content.number"]
+            cls.timestamp = data["sms.properties.timestamp"]
+            cls.pdu_type = data["sms.properties.pdu-type"]
+
+        @classmethod
+        def __extract_message(cls):
+            try: 
+                mmcli_output = subprocess.check_output(cls.query_command, stderr=subprocess.STDOUT).decode('utf-8')
+            except subprocess.CalledProcessError as error:
+                print(traceback.format_exc())
+            else:
+                data=Modem.f_layer_parse(mmcli_output)
+                cls.__build_attributes(data)
+
+        @classmethod
+        def __create(cls, number, text, delivery_report):
+            mmcli_create_sms = []
+            mmcli_create_sms += cls.modem.query_command + ["--messaging-create-sms"]
+            mmcli_create_sms[-1] += f'=number={number},text="{text}"'
+            try: 
+                mmcli_output = subprocess.check_output(mmcli_create_sms, stderr=subprocess.STDOUT).decode('utf-8').replace('\n', '')
+
+            except subprocess.CalledProcessError as error:
+                mmcli_exception_output(error)
+                print(traceback.format_exc())
+            else:
+                # print(mmcli_output)
+                mmcli_output = mmcli_output.split(': ')
+                creation_status = mmcli_output[0]
+                sms_index = mmcli_output[1].split('/')[-1]
+                if not sms_index.isdigit():
+                    raise Exception("error - sms index isn't an index:", sms_index)
+                    return False
+                else:
+                    cls.index = sms_index
+            return True
+
+        @classmethod
+        def __init__(cls, modem=None, index=None):
+            if modem is not None:
+                cls.modem = modem
+            if index is not None:
+                cls.index = index
+                cls.query_command = ["mmcli", "-Ks", cls.index]
+                cls.__extract_message()
+            elif(modem is None and index is None):
+                raise Exception('modem or index needed to initialize sms')
+
+        @classmethod
+        def get_messages(cls):
+            data = cls.__list()
+            print(data)
+            messages = []
+            for index in data:
+                sms = SMS(cls.modem, index=index)
+                messages.append( sms )
+            return messages
+
+        @classmethod
+        def set(cls, number, text, delivery_report=None, validity=None, data=None):
+            cls.number = number
+            cls.text = text
+            cls.delivery_report=delivery_report
+            cls.validity=validity
+            cls.data=data
+
+            if cls.__create(number, text, delivery_report):
+                cls._set=True
+                return True
+            return False
+
+        @classmethod
+        def is_set(cls):
+            return cls._set
+
+        @classmethod
+        def send(cls):
+            print(f"\n- sending sms: {cls.index}")
+            if cls.index is None:
+                raise Exception("failed to create sms - no index available")
+
+            mmcli_send = cls.modem.query_command + ["-s", cls.index, "--send", "--timeout=20"] 
+
+            try: 
+                mmcli_output = subprocess.check_output(mmcli_send, stderr=subprocess.STDOUT).decode('utf-8').replace('\n', '')
+
+            except subprocess.CalledProcessError as error:
+                # mmcli_exception_output(error)
+                raise Exception(f"execution failed cmd={error.cmd} index={cls.index} returncode={error.returncode} std(out/err)={error.stderr}")
+            else:
+                return True
+            return False
+
+        @classmethod
+        def delete(cls):
+            print(f"\n- deleting sms: {cls.index}")
+            command = []
+            command = cls.modem.query_command + [f"--messaging-delete-sms={cls.index}"] 
+            try: 
+               # mmcli_output = subprocess.check_output(mmcli_delete_sms, stderr=subprocess.STDOUT).decode('utf-8').replace('\n', '')
+               mmcli_output = subprocess.check_output(command, stderr=subprocess.STDOUT).decode('utf-8').replace('\n', '')
+            except subprocess.CalledProcessError as error:
+                # mmcli_exception_output(error)
+                raise Exception(error)
+            else:
+                return True
+            return False
+
+    class USSD():
+        modem=None
+
+        @classmethod
+        def __init__(cls, modem):
+            cls.modem = modem
+
+        @classmethod
+        def initiate(cls, command):
+            query_command = cls.modem.query_command
+            query_command[1] = query_command[1].replace('K', '')
+            ussd_command = query_command + [f"--3gpp-ussd-initiate={command}"]
+            try: 
+                mmcli_output = subprocess.check_output(ussd_command, stderr=subprocess.STDOUT).decode('utf-8')
+            except subprocess.CalledProcessError as error:
+                # print(traceback.format_exc())
+                cls.modem.ussd.cancel()
+                raise Exception(f"execution failed cmd={error.cmd} index={cls.modem.index} returncode={error.returncode} stderr={error.stderr} stdout={error.stdout}")
+            else:
+                mmcli_output = mmcli_output.split(": ", 1)[1].split("'")[1]
+                return mmcli_output
+
+        @classmethod
+        def respond(cls, command):
+            ussd_command = cls.modem.query_command + [f"--3gpp-ussd-respond={command}"]
+            try: 
+                mmcli_output = subprocess.check_output(ussd_command, stderr=subprocess.STDOUT).decode('utf-8')
+            except subprocess.CalledProcessError as error:
+                cls.modem.ussd.cancel()
+                raise Exception(f"execution failed cmd={error.cmd} index={cls.modem.index} returncode={error.returncode} stderr={error.stderr} stdout={error.stdout}")
+            else:
+                mmcli_output = mmcli_output.split(": '", 1)[1][:-1]
+                return mmcli_output
+
+        @classmethod
+        def cancel(cls):
+            ussd_command = cls.modem.query_command + [f"--3gpp-ussd-cancel"]
+            try: 
+                mmcli_output = subprocess.check_output(ussd_command, stderr=subprocess.STDOUT).decode('utf-8')
+            except subprocess.CalledProcessError as error:
+                raise Exception(f"execution failed cmd={error.cmd} index={cls.modem.index} returncode={error.returncode} stderr={error.stderr} stdout={error.stdout}")
+            else:
+                return True
+            
+            return False
+
+        @classmethod
+        def status(cls):
+            ussd_command = cls.modem.query_command + [f"--3gpp-ussd-status"]
+
+            try: 
+                mmcli_output = subprocess.check_output(ussd_command, stderr=subprocess.STDOUT).decode('utf-8')
+            except subprocess.CalledProcessError as error:
+                raise Exception(f"execution failed cmd={error.cmd} index={cls.modem.index} returncode={error.returncode} stderr={error.stderr} stdout={error.stdout}")
+            else:
+                mmcli_output = mmcli_output.split('\n')
+                s_details = {}
+                for output in mmcli_output:
+                    s_detail = output.split(': ')
+                    if len(s_detail) < 2:
+                        continue
+                    key = s_detail[0].replace(' ', '')
+                    s_details[key] = s_detail[1]
+
+                return s_details
+
+
+
 
     imei=None
     model=None
@@ -229,8 +239,8 @@ class Modem():
     query_command=None
 
     # sub-classes
-    sms=None
-    ussd=None
+    # sms=None
+    # ussd=None
 
     @staticmethod
     def list():
@@ -292,8 +302,10 @@ class Modem():
             self.index = index
             self.refresh()
 
-            self.sms = SMS(self)
-            self.ussd = USSD(self)
+            # self.sms = self.SMS(self)
+            # self.ussd = self.USSD(self)
+            self.SMS(self)
+            self.USSD(self)
         except Exception as error:
             print("modem instantiation failed...")
             print(traceback.format_exc())
@@ -326,7 +338,7 @@ if __name__ == "__main__":
     assert(modem.sms.delete() == True)
     '''
     
-    smsses = modem.sms.get_messages()
+    smsses = modem.SMS.get_messages()
     print(smsses)
     for sms in smsses:
         print(f"\n- index: {sms.index}")
@@ -339,7 +351,7 @@ if __name__ == "__main__":
 
     try:
         # print('ussd initiate ', modem.ussd.initiate("*158*99#"))
-        print('ussd initiate ', modem.ussd.initiate("*155#"))
+        print('ussd initiate ', modem.USSD.initiate("*155#"))
     except Exception as error:
         print(traceback.format_exc())
     # print('ussd respond ', modem.ussd.respond("6"))
