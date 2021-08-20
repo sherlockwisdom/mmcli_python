@@ -45,17 +45,33 @@ class Modem():
 
         # private method
         @classmethod
-        def list(cls):
+        def list(cls, _filter=None):
+            def filter_type(index, _type, expected):
+                if _type == expected:
+                    return index
+
             data=None
             sms_list = []
             sms_list += cls.modem.query_command + ["--messaging-list-sms"]
+            if _filter is not None:
+                sms_list[1] = sms_list[1].replace('K', '')
+                # print(sms_list)
             try: 
                 mmcli_output = subprocess.check_output(sms_list, stderr=subprocess.STDOUT).decode('utf-8')
             except subprocess.CalledProcessError as error:
                 # raise Exception(f"execution failed cmd={error.cmd} index={cls.index} returncode={error.returncode} stderr={error.stderr} stdout={error.stdout}")
-                raise Exception(error)
+                raise subprocess.CalledProcessError(cmd=error.cmd, output=error.output, returncode=error.returncode)
             else:
-                data = Modem.s_layer_parse(mmcli_output)
+                if _filter is not None:
+                    data = Modem.nok_layer_parse(mmcli_output)
+                    cats = []
+                    for index, _type in data.items():
+                        filtered=filter_type(index, _type, _filter)
+                        if filtered is not None:
+                            cats.append(filtered)
+                    data = cats
+                else:
+                    data = Modem.s_layer_parse(mmcli_output)
             return data
 
         @classmethod
@@ -72,7 +88,7 @@ class Modem():
                 mmcli_output = subprocess.check_output(cls.query_command, stderr=subprocess.STDOUT).decode('utf-8')
             except subprocess.CalledProcessError as error:
                 # print(traceback.format_exc())
-                raise Exception(error)
+                raise subprocess.CalledProcessError(cmd=error.cmd, output=error.output, returncode=error.returncode)
             else:
                 data=Modem.f_layer_parse(mmcli_output)
                 cls.__build_attributes(data)
@@ -90,7 +106,7 @@ class Modem():
                 mmcli_exception_output(error)
                 print(traceback.format_exc())
                 '''
-                raise Exception(error)
+                raise subprocess.CalledProcessError(cmd=error.cmd, output=error.output, returncode=error.returncode)
             else:
                 # print(mmcli_output)
                 mmcli_output = mmcli_output.split(': ')
@@ -144,7 +160,7 @@ class Modem():
             except subprocess.CalledProcessError as error:
                 # mmcli_exception_output(error)
                 # raise Exception(f"execution failed cmd={error.cmd} index={cls.index} returncode={error.returncode} stderr={error.stderr} stdout={error.stdout}")
-                raise Exception(error)
+                raise subprocess.CalledProcessError(cmd=error.cmd, output=error.output, returncode=error.returncode)
             else:
                 return True
             return False
@@ -160,7 +176,7 @@ class Modem():
             except subprocess.CalledProcessError as error:
                 # mmcli_exception_output(error)
                 # raise Exception(f"execution failed cmd={error.cmd} index={cls.index} returncode={error.returncode} stderr={error.stderr} stdout={error.stdout}")
-                raise Exception(error)
+                raise subprocess.CalledProcessError(cmd=error.cmd, output=error.output, returncode=error.returncode)
             else:
                 return True
             return False
@@ -183,7 +199,7 @@ class Modem():
                 # print(traceback.format_exc())
                 cls.modem.USSD.cancel()
                 # raise Exception(f"execution failed cmd={error.cmd} index={cls.modem.index} returncode={error.returncode} stderr={error.stderr} stdout={error.stdout}")
-                raise Exception(error)
+                raise subprocess.CalledProcessError(cmd=error.cmd, output=error.output, returncode=error.returncode)
             else:
                 mmcli_output = mmcli_output.split(": ", 1)[1].split("'")[1]
                 return mmcli_output
@@ -196,7 +212,7 @@ class Modem():
             except subprocess.CalledProcessError as error:
                 cls.modem.ussd.cancel()
                 # raise Exception(f"execution failed cmd={error.cmd} index={cls.modem.index} returncode={error.returncode} stderr={error.stderr} stdout={error.stdout}")
-                raise Exception(error)
+                raise subprocess.CalledProcessError(cmd=error.cmd, output=error.output, returncode=error.returncode)
             else:
                 mmcli_output = mmcli_output.split(": '", 1)[1][:-1]
                 return mmcli_output
@@ -208,7 +224,7 @@ class Modem():
                 mmcli_output = subprocess.check_output(ussd_command, stderr=subprocess.STDOUT).decode('utf-8')
             except subprocess.CalledProcessError as error:
                 # raise Exception(f"execution failed cmd={error.cmd} index={cls.modem.index} returncode={error.returncode} stderr={error.stderr} stdout={error.stdout}")
-                raise Exception(error)
+                raise subprocess.CalledProcessError(cmd=error.cmd, output=error.output, returncode=error.returncode)
             else:
                 return True
             
@@ -222,7 +238,7 @@ class Modem():
                 mmcli_output = subprocess.check_output(ussd_command, stderr=subprocess.STDOUT).decode('utf-8')
             except subprocess.CalledProcessError as error:
                 # raise Exception(f"execution failed cmd={error.cmd} index={cls.modem.index} returncode={error.returncode} stderr={error.stderr} stdout={error.stdout}")
-                raise Exception(error)
+                raise subprocess.CalledProcessError(cmd=error.cmd, output=error.output, returncode=error.returncode)
             else:
                 mmcli_output = mmcli_output.split('\n')
                 s_details = {}
@@ -246,7 +262,7 @@ class Modem():
             # return [index[1].split('/')[-1] for index in Modem.f_layer_parse(data)]
         except subprocess.CalledProcessError as error:
             # raise Exception(f"execution failed cmd={error.cmd} index={self.index} returncode={error.returncode} std(out/err)={error.stderr}")
-            raise Exception(error)
+            raise subprocess.CalledProcessError(cmd=error.cmd, output=error.output, returncode=error.returncode)
 
     # private methods
     @staticmethod
@@ -275,6 +291,19 @@ class Modem():
             sms.append( sms_index )
 
         return sms
+    
+    @staticmethod
+    def nok_layer_parse(data):
+        data = data.split('\n')
+        cats = {}
+        for line in data:
+            # print(line)
+            if len(line) < 1:
+                continue
+            secs = line.split(' ')
+            # print(secs)
+            cats[secs[-2].split('/')[-1]] = secs[-1].replace('(', '').replace(')', '')
+        return cats
 
     def __build_attributes(self, data):
         '''look into
@@ -316,7 +345,7 @@ class Modem():
             self.__build_attributes(data)
         except subprocess.CalledProcessError as error:
             # raise Exception(f"execution failed cmd={error.cmd} index={cls.index} returncode={error.returncode} stderr={error.stderr} stdout={error.stdout}")
-            raise Exception(error)
+            raise subprocess.CalledProcessError(cmd=error.cmd, output=error.output, returncode=error.returncode)
     
     def toggle(self):
         try:
@@ -330,7 +359,7 @@ class Modem():
             # print(mmcli_output)
         except subprocess.CalledProcessError as error:
             # raise Exception(f"execution failed cmd={error.cmd} index={self.index} returncode={error.returncode} stderr={error.stderr} stdout={error.stdout}")
-            raise Exception(error)
+            raise subprocess.CalledProcessError(cmd=error.cmd, output=error.output, returncode=error.returncode)
 
     def reset(self):
         try:
@@ -339,7 +368,7 @@ class Modem():
             mmcli_output = subprocess.check_output(query_command, stderr=subprocess.STDOUT).decode('utf-8')
         except subprocess.CalledProcessError as error:
             # raise Exception(f"execution failed cmd={error.cmd} index={self.index} returncode={error.returncode} stderr={error.stderr} stdout={error.stdout}")
-            raise Exception(error)
+            raise subprocess.CalledProcessError(cmd=error.cmd, output=error.output, returncode=error.returncode)
 
 
 if __name__ == "__main__":
