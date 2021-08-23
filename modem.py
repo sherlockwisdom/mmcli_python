@@ -180,6 +180,19 @@ class Modem():
             else:
                 return True
             return False
+        
+        '''
+        @classmethod
+        def fetch(cls, index=None):
+            if cls.index is not None:
+                raise Exception("failed to fetch sms - no index available")
+            
+            mmcli_send = cls.modem.query_command + [cls.index] 
+            except subprocess.CalledProcessError as error:
+                # mmcli_exception_output(error)
+                # raise Exception(f"execution failed cmd={error.cmd} index={cls.index} returncode={error.returncode} stderr={error.stderr} stdout={error.stdout}")
+                raise subprocess.CalledProcessError(cmd=error.cmd, output=error.output, returncode=error.returncode)
+        '''
 
     class USSD():
         modem=None
