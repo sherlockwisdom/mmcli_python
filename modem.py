@@ -347,13 +347,18 @@ class Modem():
             # raise Exception(f"execution failed cmd={error.cmd} index={cls.index} returncode={error.returncode} stderr={error.stderr} stdout={error.stdout}")
             raise subprocess.CalledProcessError(cmd=error.cmd, output=error.output, returncode=error.returncode)
     
-    def toggle(self):
+    def disable(self):
         try:
             # query_command = self.query_command + ['-d', '&&'] + self.query_command + ['-e']
             query_command = self.query_command + ['-d']
             mmcli_output = subprocess.check_output(query_command, stderr=subprocess.STDOUT).decode('unicode_escape')
             # print(mmcli_output)
+        except subprocess.CalledProcessError as error:
+            # raise Exception(f"execution failed cmd={error.cmd} index={self.index} returncode={error.returncode} stderr={error.stderr} stdout={error.stdout}")
+            raise subprocess.CalledProcessError(cmd=error.cmd, output=error.output, returncode=error.returncode)
 
+    def enable(self):
+        try:
             query_command = self.query_command + ['-e']
             mmcli_output = subprocess.check_output(query_command, stderr=subprocess.STDOUT).decode('unicode_escape')
             # print(mmcli_output)
@@ -361,6 +366,7 @@ class Modem():
             # raise Exception(f"execution failed cmd={error.cmd} index={self.index} returncode={error.returncode} stderr={error.stderr} stdout={error.stdout}")
             raise subprocess.CalledProcessError(cmd=error.cmd, output=error.output, returncode=error.returncode)
 
+    ''' reset may not be allowed by most modems '''
     def reset(self):
         try:
             # query_command = self.query_command + ['-d', '&&'] + self.query_command + ['-e']
