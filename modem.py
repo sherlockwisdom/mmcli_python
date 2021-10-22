@@ -193,8 +193,8 @@ class Modem():
             query_command = cls.modem.query_command
             query_command[1] = query_command[1].replace('K', '')
             ussd_command = query_command + [f'--3gpp-ussd-initiate={command}', f'--timeout={timeout}']
+            # cls.modem.USSD.cancel()
             try: 
-                cls.modem.USSD.cancel()
                 mmcli_output = subprocess.check_output(ussd_command, stderr=subprocess.STDOUT).decode('unicode_escape')
             except subprocess.CalledProcessError as error:
                 # print(traceback.format_exc())
