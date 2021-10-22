@@ -189,15 +189,15 @@ class Modem():
             cls.modem = modem
 
         @classmethod
-        def initiate(cls, command, timeout=10):
+        def initiate(cls, command, timeout=60):
             query_command = cls.modem.query_command
             query_command[1] = query_command[1].replace('K', '')
             ussd_command = query_command + [f'--3gpp-ussd-initiate={command}', f'--timeout={timeout}']
             try: 
+                cls.modem.USSD.cancel()
                 mmcli_output = subprocess.check_output(ussd_command, stderr=subprocess.STDOUT).decode('unicode_escape')
             except subprocess.CalledProcessError as error:
                 # print(traceback.format_exc())
-                cls.modem.USSD.cancel()
                 # raise Exception(f"execution failed cmd={error.cmd} index={cls.modem.index} returncode={error.returncode} stderr={error.stderr} stdout={error.stdout}")
                 raise subprocess.CalledProcessError(cmd=error.cmd, output=error.output, returncode=error.returncode)
             else:
@@ -205,12 +205,15 @@ class Modem():
                 return mmcli_output
 
         @classmethod
-        def respond(cls, command):
-            ussd_command = cls.modem.query_command + [f"--3gpp-ussd-respond={command}"]
+        def respond(cls, command, timeout=60):
+            query_command = cls.modem.query_command
+            query_command[1] = query_command[1].replace('K', '')
+            ussd_command = query_command + [f'--3gpp-ussd-respond={command}']
+            # ussd_command = cls.modem.query_command + [f'--3gpp-ussd-respond="{command}"', f'--timeout={timeout}']
             try: 
-                mmcli_output = subprocess.check_output(ussd_command, stderr=subprocess.STDOUT, shell=True).decode('unicode_escape')
+                mmcli_output = subprocess.check_output(ussd_command, stderr=subprocess.STDOUT).decode('unicode_escape')
             except subprocess.CalledProcessError as error:
-                cls.modem.ussd.cancel()
+                # cls.modem.ussd.cancel()
                 # raise Exception(f"execution failed cmd={error.cmd} index={cls.modem.index} returncode={error.returncode} stderr={error.stderr} stdout={error.stdout}")
                 raise subprocess.CalledProcessError(cmd=error.cmd, output=error.output, returncode=error.returncode)
             else:
