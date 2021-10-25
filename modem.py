@@ -194,8 +194,17 @@ class Modem():
                 self.command = command
                 self.output = output
 
+        class ActiveSession(Exception):
+            def __init__(self, command, output):
+                self.command = command
+                self.output = output
+
         @classmethod
         def get_exception(cls, command, output):
+            if (str(output).find(
+                'GDBus.Error:org.freedesktop.ModemManager1.Error.Core.WrongState: Cannot initiate USSD: a session is already active')
+                > -1):
+                return cls.ActiveSession(command, output)
             if (str(output).find(
                 'GDBus.Error:org.freedesktop.ModemManager1.Error.Core.WrongState: Cannot initiate USSD')
                 > -1 or str(output).find(
@@ -258,7 +267,8 @@ class Modem():
             except subprocess.CalledProcessError as error:
                 # raise Exception(f"execution failed cmd={error.cmd} index={cls.modem.index} returncode={error.returncode} stderr={error.stderr} stdout={error.stdout}")
                 # raise subprocess.CalledProcessError(cmd=error.cmd, output=error.output, returncode=error.returncode)
-                raise cls.get_exception(error.cmd, error.output)
+                # raise cls.get_exception(error.cmd, error.output)
+                pass
             else:
                 return True
             
