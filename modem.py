@@ -184,6 +184,30 @@ class Modem():
     class USSD():
         modem=None
 
+        class CannotInitiateUSSD(Exception):
+            def __init__(self, command, output):
+                self.command = command
+                self.output = output
+
+        class UnknownError(Exception):
+            def __init__(self, command, output):
+                self.command = command
+                self.output = output
+
+        @classmethod
+        def get_exception(cls, command, output):
+            if (str(output).find(
+                'GDBus.Error:org.freedesktop.ModemManager1.Error.Core.WrongState: Cannot initiate USSD')
+                > -1 or str(output).find(
+                    'GDBus.Error:org.freedesktop.ModemManager1.Error.Core.Aborted')
+                > -1):
+                return cls.CannotInitiateUSSD(command, output)
+            """
+            if str(output).find('GDBus.Error:org.freedesktop.ModemManager1.Error.MobileEquipment.Unknown: Unknown error') > -1:
+                return cls.UnknownError(command, output)
+            """
+            return cls.UnknownError(command, output)
+
         @classmethod
         def __init__(cls, modem):
             cls.modem = modem
@@ -199,9 +223,15 @@ class Modem():
             except subprocess.CalledProcessError as error:
                 # print(traceback.format_exc())
                 # raise Exception(f"execution failed cmd={error.cmd} index={cls.modem.index} returncode={error.returncode} stderr={error.stderr} stdout={error.stdout}")
-                raise subprocess.CalledProcessError(cmd=error.cmd, output=error.output, returncode=error.returncode)
+                # raise subprocess.CalledProcessError(cmd=error.cmd, output=error.output, returncode=error.returncode)
+                raise cls.get_exception(command=error.cmd, output=error.output)
             else:
+                # print(mmcli_output)
+
+                # USSD session initiated; new reply from network:
                 mmcli_output = mmcli_output.split(": ", 1)[1].split("'")[1]
+
+                # print(mmcli_output == '237693586675')
                 return mmcli_output
 
         @classmethod
@@ -227,7 +257,8 @@ class Modem():
                 mmcli_output = subprocess.check_output(ussd_command, stderr=subprocess.STDOUT).decode('unicode_escape')
             except subprocess.CalledProcessError as error:
                 # raise Exception(f"execution failed cmd={error.cmd} index={cls.modem.index} returncode={error.returncode} stderr={error.stderr} stdout={error.stdout}")
-                raise subprocess.CalledProcessError(cmd=error.cmd, output=error.output, returncode=error.returncode)
+                # raise subprocess.CalledProcessError(cmd=error.cmd, output=error.output, returncode=error.returncode)
+                raise cls.get_exception(error.cmd, error.output)
             else:
                 return True
             
