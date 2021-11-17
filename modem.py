@@ -6,6 +6,7 @@
 
 import traceback
 import subprocess
+import re
 from subprocess import Popen, PIPE
 
 import enum
@@ -84,10 +85,11 @@ class Modem():
         def __extract_message(cls):
             try: 
                 mmcli_output = subprocess.check_output(cls.query_command, stderr=subprocess.STDOUT, encoding='unicode_escape')
+                # self.logging.debug(mmcli_output)
             except subprocess.CalledProcessError as error:
                 raise subprocess.CalledProcessError(cmd=error.cmd, output=error.output, returncode=error.returncode)
             else:
-                data=Modem.f_layer_parse(mmcli_output)
+                data=Modem.sms_f_layer_parse(mmcli_output)
                 cls.__build_attributes(data)
 
         @classmethod
@@ -288,6 +290,39 @@ class Modem():
             key = m_detail[0].replace(' ', '')
             details[key] = m_detail[1]
 
+        return details
+    
+    @staticmethod
+    def sms_f_layer_parse(data):
+        data = data.split('\n')
+        details = {}
+        m_detail=None
+        sms_text = []
+
+        is_sms_text = False
+        for output in data:
+            if output.find("sms.content.text") > -1:
+                is_sms_text = True
+                m_detail = output.split(': ')
+                if len(m_detail) < 2:
+                    continue
+                sms_text.append(m_detail[1])
+                continue
+
+            if not is_sms_text or (
+                    is_sms_text and re.search(r"^sms\.\w*\S\w*[\S]\w*\s*: ", output)):
+                is_sms_text = False
+
+                m_detail = output.split(': ')
+                if len(m_detail) < 2:
+                    continue
+                key = m_detail[0].replace(' ', '')
+                details[key] = m_detail[1]
+            else:
+                sms_text.append(output)
+        sms_text = '\n'.join(sms_text)
+        details['sms.content.text'] = sms_text
+        # print(details)
         return details
 
     @staticmethod
