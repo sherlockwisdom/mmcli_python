@@ -19,6 +19,8 @@ class Modem():
     power_state=None
     operator_code=None
     operator_name=None
+    model=None
+    manufacturer=None
     query_command=None
 
     class IDENTIFIERS(enum.Enum):
@@ -35,7 +37,6 @@ class Modem():
         pdu_type=None
         state=None
         timestamp=None
-        query_command=None
 
         # required for sending
         delivery_report=None
@@ -43,6 +44,7 @@ class Modem():
         data=None
         _set=False
 
+        query_command=None
 
         # private method
         @classmethod
@@ -362,6 +364,7 @@ class Modem():
         self.power_state = data["modem.generic.power-state"]
         self.operator_code = data["modem.3gpp.operator-code"]
         self.operator_name = data["modem.3gpp.operator-name"]
+        self.manufacturer = data["modem.generic.manufacturer"]
 
     # MODEM:__init__
     def __init__(self, index):
