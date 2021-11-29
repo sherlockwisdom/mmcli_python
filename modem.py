@@ -23,6 +23,14 @@ class Modem():
     manufacturer=None
     query_command=None
 
+    class MissingModem(Exception):
+        def __init__(self):
+            super().__init__()
+
+    class MissingIndex(Exception):
+        def __init__(self):
+            super().__init__()
+
     class IDENTIFIERS(enum.Enum):
         IMEI=1
         INDEX=2
@@ -38,7 +46,6 @@ class Modem():
         state=None
         timestamp=None
 
-        # required for sending
         delivery_report=None
         validity=None
         data=None
@@ -46,7 +53,16 @@ class Modem():
 
         query_command=None
 
-        # private method
+        @staticmethod
+        def sms_index_type_parser(data):
+            data = data.split('\n')
+            cats = {}
+            for line in data:
+                if len(line) > 0:
+                    secs = line.split(' ')
+                    cats[secs[-2].split('/')[-1]] = secs[-1].replace('(', '').replace(')', '')
+            return cats
+
         @classmethod
         def list(cls, _filter=None):
             def filter_type(index, _type, expected):
@@ -59,12 +75,13 @@ class Modem():
             if _filter is not None:
                 sms_list[1] = sms_list[1].replace('K', '')
             try: 
-                mmcli_output = subprocess.check_output(sms_list, stderr=subprocess.STDOUT).decode('unicode_escape')
+                mmcli_output = subprocess.check_output(sms_list, 
+                        stderr=subprocess.STDOUT).decode('unicode_escape')
             except subprocess.CalledProcessError as error:
-                raise subprocess.CalledProcessError(cmd=error.cmd, output=error.output, returncode=error.returncode)
+                raise error
             else:
                 if _filter is not None:
-                    data = Modem.nok_layer_parse(mmcli_output)
+                    data = SMS.sms_index_type_parser(mmcli_output)
                     cats = []
                     for index, _type in data.items():
                         filtered=filter_type(index, _type, _filter)
@@ -72,7 +89,7 @@ class Modem():
                             cats.append(filtered)
                     data = cats
                 else:
-                    data = Modem.s_layer_parse(mmcli_output)
+                    data = Modem.index_value_parser(mmcli_output)
             return data
 
         @classmethod
@@ -83,37 +100,73 @@ class Modem():
             cls.timestamp = data["sms.properties.timestamp"]
             cls.pdu_type = data["sms.properties.pdu-type"]
 
-        @classmethod
-        def __extract_message(cls):
-            try: 
-                mmcli_output = subprocess.check_output(cls.query_command, stderr=subprocess.STDOUT, encoding='unicode_escape')
-                # self.logging.debug(mmcli_output)
-            except subprocess.CalledProcessError as error:
-                raise subprocess.CalledProcessError(cmd=error.cmd, output=error.output, returncode=error.returncode)
-            else:
-                data=Modem.sms_f_layer_parse(mmcli_output)
-                cls.__build_attributes(data)
+
+        @staticmethod
+        def sms_key_value_parser(data):
+            data = data.split('\n')
+            details = {}
+            m_detail=None
+            sms_text = []
+
+            is_sms_text = False
+            for output in data:
+                if output.find("sms.content.text") > -1:
+                    is_sms_text = True
+                    m_detail = output.split(': ')
+                    if len(m_detail) > 1:
+                        sms_text.append(m_detail[1])
+                        continue
+
+                if not is_sms_text or (
+                        is_sms_text and re.search(r"^sms\.\w*\S\w*[\S]\w*\s*: ", output)):
+                    is_sms_text = False
+
+                    m_detail = output.split(': ')
+                    if len(m_detail) > 1:
+                        key = m_detail[0].replace(' ', '')
+                        details[key] = m_detail[1]
+                else:
+                    sms_text.append(output)
+
+            sms_text = '\n'.join(sms_text)
+            details['sms.content.text'] = sms_text
+            return details
 
         @classmethod
-        def __create(cls, number, text, delivery_report):
+        def __extract_message__(cls):
+            try: 
+                mmcli_output = subprocess.check_output(cls.query_command, 
+                        stderr=subprocess.STDOUT, encoding='unicode_escape')
+
+                data=SMS.sms_key_value_parser(mmcli_output)
+                cls.__build_attributes(data)
+
+            except subprocess.CalledProcessError as error:
+                raise error
+            except Exception as error:
+                raise error
+
+        @classmethod
+        def __create__(cls, number, text, delivery_report):
             mmcli_create_sms = []
             mmcli_create_sms += cls.modem.query_command + ["--messaging-create-sms"]
             mmcli_create_sms[-1] += f'=number={number},text="{text}"'
             try: 
-                mmcli_output = subprocess.check_output(mmcli_create_sms, stderr=subprocess.STDOUT).decode('unicode_escape').replace('\n', '')
+                mmcli_output = subprocess.check_output(mmcli_create_sms, 
+                        stderr=subprocess.STDOUT).decode('unicode_escape').replace('\n', '')
 
-            except subprocess.CalledProcessError as error:
-                raise subprocess.CalledProcessError(cmd=error.cmd, output=error.output, returncode=error.returncode)
-            else:
                 mmcli_output = mmcli_output.split(': ')
                 creation_status = mmcli_output[0]
                 sms_index = mmcli_output[1].split('/')[-1]
                 if not sms_index.isdigit():
-                    raise Exception("error - sms index isn't an index:", sms_index)
-                    return False
+                    raise Modem.MissingIndex()
                 else:
                     cls.index = sms_index
-            return True
+
+            except subprocess.CalledProcessError as error:
+                raise error
+            except Exception as error:
+                raise error
 
         # SMS:__init__
         @classmethod
@@ -123,9 +176,13 @@ class Modem():
             if index is not None:
                 cls.index = index
                 cls.query_command = ["mmcli", "-Ks", cls.index]
-                cls.__extract_message()
-            elif(modem is None and index is None):
-                raise Exception('modem or index needed to initialize sms')
+                cls.__extract_message__()
+
+            elif modem is None:
+                raise Modem.MissingModem()
+
+            elif index is None:
+                raise Modem.MissingIndex()
 
         @classmethod
         def set(cls, number, text, delivery_report=None, validity=None, data=None):
@@ -135,71 +192,69 @@ class Modem():
             cls.validity=validity
             cls.data=data
 
-            if cls.__create(number, text, delivery_report):
+            if cls.__create__(number, text, delivery_report):
                 cls._set=True
             
             return cls
 
         @classmethod
-        def is_set(cls):
-            return cls._set
-
-        @classmethod
         def send(cls, timeout=20):
             if cls.index is None:
-                raise Exception("failed to create sms - no index available")
+                raise Modem.MissingIndex()
 
-            mmcli_send = cls.modem.query_command + ["-s", cls.index, "--send", f"--timeout={timeout}"] 
+            mmcli_send = cls.modem.query_command + \
+                    ["-s", cls.index, "--send", f"--timeout={timeout}"] 
             try: 
-                mmcli_output = subprocess.check_output(mmcli_send, stderr=subprocess.STDOUT).decode('unicode_escape').replace('\n', '')
+                return subprocess.check_output(mmcli_send, 
+                        stderr=subprocess.STDOUT).decode('unicode_escape').replace('\n', '')
             except subprocess.CalledProcessError as error:
-                raise subprocess.CalledProcessError(cmd=error.cmd, output=error.output, returncode=error.returncode)
-            else:
-                return True
-            return False
+                raise error
 
         @classmethod
         def delete(cls, index):
             command = []
             command = cls.modem.query_command + [f"--messaging-delete-sms={index}"] 
             try: 
-               mmcli_output = subprocess.check_output(command, stderr=subprocess.STDOUT).decode('unicode_escape').replace('\n', '')
+               return subprocess.check_output(command, 
+                       stderr=subprocess.STDOUT).decode('unicode_escape').replace('\n', '')
             except subprocess.CalledProcessError as error:
-                raise subprocess.CalledProcessError(cmd=error.cmd, output=error.output, returncode=error.returncode)
-            else:
-                return True
-            return False
+                raise error
 
-    class USSD():
+    class USSD:
         modem=None
 
         class CannotInitiateUSSD(Exception):
             def __init__(self, command, output):
                 self.command = command
                 self.output = output
+                super().__init__()
 
         class UnknownError(Exception):
             def __init__(self, command, output):
                 self.command = command
                 self.output = output
+                super().__init__()
 
         class ActiveSession(Exception):
             def __init__(self, command, output):
                 self.command = command
                 self.output = output
+                super().__init__()
 
         @classmethod
         def get_exception(cls, command, output):
             if (str(output).find(
-                'GDBus.Error:org.freedesktop.ModemManager1.Error.Core.WrongState: Cannot initiate USSD: a session is already active')
-                > -1):
+                'GDBus.Error:org.freedesktop.ModemManager1.Error.Core.WrongState: 
+                Cannot initiate USSD: a session is already active') > -1):
                 return cls.ActiveSession(command, output)
+
             if (str(output).find(
-                'GDBus.Error:org.freedesktop.ModemManager1.Error.Core.WrongState: Cannot initiate USSD')
-                > -1 or str(output).find(
-                    'GDBus.Error:org.freedesktop.ModemManager1.Error.Core.Aborted')
-                > -1):
+                'GDBus.Error:org.freedesktop.ModemManager1.Error.Core.WrongState: 
+                Cannot initiate USSD') > -1 or \
+                        str(output).find(
+                            'GDBus.Error:org.freedesktop.ModemManager1.Error.Core.Aborted') > -1):
                 return cls.CannotInitiateUSSD(command, output)
+
             return cls.UnknownError(command, output)
 
         @classmethod
@@ -212,12 +267,13 @@ class Modem():
             query_command[1] = query_command[1].replace('K', '')
             ussd_command = query_command + [f'--3gpp-ussd-initiate={command}', f'--timeout={timeout}']
             try: 
-                mmcli_output = subprocess.check_output(ussd_command, stderr=subprocess.STDOUT).decode('unicode_escape')
-            except subprocess.CalledProcessError as error:
-                raise cls.get_exception(command=error.cmd, output=error.output)
-            else:
+                mmcli_output = subprocess.check_output(ussd_command, 
+                        stderr=subprocess.STDOUT).decode('unicode_escape')
+
                 mmcli_output = mmcli_output.split(": ", 1)[1].split("'")[1]
                 return mmcli_output
+            except subprocess.CalledProcessError as error:
+                raise cls.get_exception(command=error.cmd, output=error.output)
 
         @classmethod
         def respond(cls, command, timeout=60):
@@ -225,14 +281,11 @@ class Modem():
             query_command[1] = query_command[1].replace('K', '')
             ussd_command = query_command + [f'--3gpp-ussd-respond={command}']
             try: 
-                mmcli_output = subprocess.check_output(ussd_command, 
-                        stderr=subprocess.STDOUT).decode('unicode_escape')
+                return subprocess.check_output(ussd_command, 
+                        stderr=subprocess.STDOUT
+                        ).decode('unicode_escape').split(": '", 1)[1][:-1]
             except subprocess.CalledProcessError as error:
-                raise subprocess.CalledProcessError(cmd=error.cmd, 
-                        output=error.output, returncode=error.returncode)
-            else:
-                mmcli_output = mmcli_output.split(": '", 1)[1][:-1]
-                return mmcli_output
+                raise error
 
         @classmethod
         def cancel(cls):
@@ -241,12 +294,9 @@ class Modem():
                 mmcli_output = subprocess.check_output(ussd_command, 
                         stderr=subprocess.STDOUT).decode('unicode_escape')
             except subprocess.CalledProcessError as error:
-                # raise(error)
+                ''' would most likely always raise this error, but can be ignored with no 
+                consequences '''
                 pass
-            else:
-                return True
-            
-            return False
 
         @classmethod
         def status(cls):
@@ -254,104 +304,60 @@ class Modem():
 
             try: 
                 mmcli_output = subprocess.check_output(ussd_command, 
-                        stderr=subprocess.STDOUT).decode('unicode_escape')
-            except subprocess.CalledProcessError as error:
-                raise subprocess.CalledProcessError(cmd=error.cmd, output=error.output,
-                        returncode=error.returncode)
-            else:
-                mmcli_output = mmcli_output.split('\n')
+                        stderr=subprocess.STDOUT).decode('unicode_escape').split('\n')
+
                 s_details = {}
                 for output in mmcli_output:
                     s_detail = output.split(': ')
-                    if len(s_detail) < 2:
-                        continue
-                    key = s_detail[0].replace(' ', '')
-                    s_details[key] = s_detail[1]
+                    if len(s_detail) > 1:
+                        key = s_detail[0].replace(' ', '')
+                        s_details[key] = s_detail[1]
 
                 return s_details
+            except subprocess.CalledProcessError as error:
+                raise subprocess.CalledProcessError(cmd=error.cmd, output=error.output,
+                        returncode=error.returncode)
+            except Exception as error:
+                raise error
 
 
     @staticmethod
     def list():
         try:
             query_command=["mmcli", "-KL"]
-            return [index for index in Modem.s_layer_parse(subprocess.check_output(query_command, stderr=subprocess.STDOUT).decode('unicode_escape'))]
+            return [index for index in Modem.index_value_parser(
+                subprocess.check_output(query_command, 
+                    stderr=subprocess.STDOUT).decode('unicode_escape'))]
         except subprocess.CalledProcessError as error:
-            raise subprocess.CalledProcessError(cmd=error.cmd, output=error.output, returncode=error.returncode)
+            raise error
 
-    # private methods
     @staticmethod
-    def f_layer_parse(data):
+    def key_value_parser(data):
         data = data.split('\n')
         details = {}
         m_detail=None
         for output in data:
             m_detail = output.split(': ')
-            if len(m_detail) < 2:
-                continue
-            key = m_detail[0].replace(' ', '')
-            details[key] = m_detail[1]
-
-        return details
-    
-    @staticmethod
-    def sms_f_layer_parse(data):
-        data = data.split('\n')
-        details = {}
-        m_detail=None
-        sms_text = []
-
-        is_sms_text = False
-        for output in data:
-            if output.find("sms.content.text") > -1:
-                is_sms_text = True
-                m_detail = output.split(': ')
-                if len(m_detail) < 2:
-                    continue
-                sms_text.append(m_detail[1])
-                continue
-
-            if not is_sms_text or (
-                    is_sms_text and re.search(r"^sms\.\w*\S\w*[\S]\w*\s*: ", output)):
-                is_sms_text = False
-
-                m_detail = output.split(': ')
-                if len(m_detail) < 2:
-                    continue
+            if len(m_detail) >= 2:
                 key = m_detail[0].replace(' ', '')
                 details[key] = m_detail[1]
-            else:
-                sms_text.append(output)
-        sms_text = '\n'.join(sms_text)
-        details['sms.content.text'] = sms_text
-        # print(details)
+
         return details
 
     @staticmethod
-    def s_layer_parse(data):
+    def index_value_parser(data):
         data = data.split('\n')
         n_modems = int(data[0].split(': ')[1])
         sms = []
         for i in range(1, (n_modems + 1)):
             sms_index = data[i].split('/')[-1]
-            if not sms_index.isdigit():
-                continue
-            sms.append( sms_index )
+            if sms_index.isdigit():
+                sms.append( sms_index )
 
         return sms
     
-    @staticmethod
-    def nok_layer_parse(data):
-        data = data.split('\n')
-        cats = {}
-        for line in data:
-            if len(line) < 1:
-                continue
-            secs = line.split(' ')
-            cats[secs[-2].split('/')[-1]] = secs[-1].replace('(', '').replace(')', '')
-        return cats
 
-    def __build_attributes(self, data):
+    def __build_attributes__(self, data):
         '''look into
         - modem.generic.device-identifier
         - modem.generic.equipment-identifier
@@ -380,68 +386,35 @@ class Modem():
 
     def refresh(self):
         try:
-            data=subprocess.check_output(self.query_command, stderr=subprocess.STDOUT)
+            data=subprocess.check_output(self.query_command, 
+                    stderr=subprocess.STDOUT)
             data=data.decode('unicode_escape')
-            data = Modem.f_layer_parse(data)
-            self.__build_attributes(data)
+            data = Modem.key_value_parser(data)
+            self.__build_attributes__(data)
         except subprocess.CalledProcessError as error:
-            raise subprocess.CalledProcessError(cmd=error.cmd, output=error.output, returncode=error.returncode)
+            raise error
     
     def disable(self):
         try:
             query_command = self.query_command + ['-d']
-            mmcli_output = subprocess.check_output(query_command, stderr=subprocess.STDOUT).decode('unicode_escape')
+            mmcli_output = subprocess.check_output(query_command, 
+                    stderr=subprocess.STDOUT).decode('unicode_escape')
         except subprocess.CalledProcessError as error:
-            raise subprocess.CalledProcessError(cmd=error.cmd, output=error.output, returncode=error.returncode)
+            raise error
 
     def enable(self):
         try:
             query_command = self.query_command + ['-e']
-            mmcli_output = subprocess.check_output(query_command, stderr=subprocess.STDOUT).decode('unicode_escape')
+            mmcli_output = subprocess.check_output(query_command, 
+                    stderr=subprocess.STDOUT).decode('unicode_escape')
         except subprocess.CalledProcessError as error:
-            raise subprocess.CalledProcessError(cmd=error.cmd, output=error.output, returncode=error.returncode)
+            raise error
 
     ''' reset may not be allowed by most modems '''
     def reset(self):
         try:
             query_command = self.query_command + ['-r']
-            mmcli_output = subprocess.check_output(query_command, stderr=subprocess.STDOUT).decode('unicode_escape')
+            mmcli_output = subprocess.check_output(query_command, 
+                    stderr=subprocess.STDOUT).decode('unicode_escape')
         except subprocess.CalledProcessError as error:
-            raise subprocess.CalledProcessError(cmd=error.cmd, output=error.output, returncode=error.returncode)
-
-if __name__ == "__main__":
-    import sys
-    modem = Modem(sys.argv[1])
-    print(f"- imei: {modem.imei}")
-    print(f"- model: {modem.model}")
-    print(f"- index: {modem.index}")
-    print(f"- state: {modem.state}")
-    print(f"- dbus path: {modem.dbus_path}")
-    print(f"- power state: {modem.power_state}")
-    print(f"- operator code: {modem.operator_code}")
-    print(f"- operator name: {modem.operator_name}")
-
-    try:
-        modem.SMS.set(number=sys.argv[2], text="Hello world")
-        print(f"\n- sending:text - {modem.SMS.text}")
-        print(f"- sending:number - {modem.SMS.number}")
-        print(f"- sending:index - {modem.SMS.index}")
-        modem.SMS.send()
-    except Exception as error:
-        print(error)
-    
-    indexes = modem.SMS.list()
-    print('found sms\'', indexes)
-
-    for index in indexes:
-        try:
-            print(index)
-            modem.SMS.delete(index=index)
-        except Exception as error:
-            print(error)
-
-    try:
-        modem.toggle()
-        print('ussd initiate ', modem.USSD.initiate("*155#"))
-    except Exception as error:
-        print(traceback.format_exc())
+            raise error
