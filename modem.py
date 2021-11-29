@@ -243,16 +243,19 @@ class Modem():
 
         @classmethod
         def get_exception(cls, command, output):
-            if (str(output).find(
-                'GDBus.Error:org.freedesktop.ModemManager1.Error.Core.WrongState: 
-                Cannot initiate USSD: a session is already active') > -1):
+            exception_wrongstate_activesession = \
+                    'GDBus.Error:org.freedesktop.ModemManager1.Error.Core.WrongState: ' + \
+                    'Cannot initiate USSD: a session is already active'
+            if str(output).find(exception_wrongstate_activesession) > -1:
                 return cls.ActiveSession(command, output)
 
-            if (str(output).find(
-                'GDBus.Error:org.freedesktop.ModemManager1.Error.Core.WrongState: 
-                Cannot initiate USSD') > -1 or \
-                        str(output).find(
-                            'GDBus.Error:org.freedesktop.ModemManager1.Error.Core.Aborted') > -1):
+            exception_wrongstate_cannotinitiateussd = \
+                'GDBus.Error:org.freedesktop.ModemManager1.Error.Core.WrongState: ' + \
+                'Cannot initiate USSD'
+            exception_error_core_aborted = \
+                    'GDBus.Error:org.freedesktop.ModemManager1.Error.Core.Aborted'
+            if str(output).find(exception_wrongstate_cannotinitiateussd) > -1 or \
+                    str(output).find(exception_error_core_aborted) > -1:
                 return cls.CannotInitiateUSSD(command, output)
 
             return cls.UnknownError(command, output)
@@ -315,8 +318,7 @@ class Modem():
 
                 return s_details
             except subprocess.CalledProcessError as error:
-                raise subprocess.CalledProcessError(cmd=error.cmd, output=error.output,
-                        returncode=error.returncode)
+                raise error
             except Exception as error:
                 raise error
 
@@ -348,13 +350,13 @@ class Modem():
     def index_value_parser(data):
         data = data.split('\n')
         n_modems = int(data[0].split(': ')[1])
-        sms = []
+        indexes = []
         for i in range(1, (n_modems + 1)):
-            sms_index = data[i].split('/')[-1]
-            if sms_index.isdigit():
-                sms.append( sms_index )
+            index = data[i].split('/')[-1]
+            if index.isdigit():
+                indexes.append(index)
 
-        return sms
+        return indexes
     
 
     def __build_attributes__(self, data):
