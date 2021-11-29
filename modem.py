@@ -77,9 +77,6 @@ class Modem():
             try: 
                 mmcli_output = subprocess.check_output(sms_list, 
                         stderr=subprocess.STDOUT).decode('unicode_escape')
-            except subprocess.CalledProcessError as error:
-                raise error
-            else:
                 if _filter is not None:
                     data = SMS.sms_index_type_parser(mmcli_output)
                     cats = []
@@ -90,7 +87,12 @@ class Modem():
                     data = cats
                 else:
                     data = Modem.index_value_parser(mmcli_output)
-            return data
+                    return data
+
+            except subprocess.CalledProcessError as error:
+                raise error
+            except Exception as error:
+                raise error
 
         @classmethod
         def __build_attributes(cls, data):
