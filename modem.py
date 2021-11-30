@@ -78,7 +78,7 @@ class Modem():
                 mmcli_output = subprocess.check_output(sms_list, 
                         stderr=subprocess.STDOUT).decode('unicode_escape')
                 if _filter is not None:
-                    data = SMS.sms_index_type_parser(mmcli_output)
+                    data = Modem.SMS.sms_index_type_parser(mmcli_output)
                     cats = []
                     for index, _type in data.items():
                         filtered=filter_type(index, _type, _filter)
@@ -140,7 +140,7 @@ class Modem():
                 mmcli_output = subprocess.check_output(cls.query_command, 
                         stderr=subprocess.STDOUT, encoding='unicode_escape')
 
-                data=SMS.sms_key_value_parser(mmcli_output)
+                data = Modem.SMS.sms_key_value_parser(mmcli_output)
                 cls.__build_attributes(data)
 
             except subprocess.CalledProcessError as error:
@@ -180,11 +180,12 @@ class Modem():
                 cls.query_command = ["mmcli", "-Ks", cls.index]
                 cls.__extract_message__()
 
-            elif modem is None:
-                raise Modem.MissingModem()
+            if modem is None:
+                if index is None:
+                    raise Modem.MissingIndex()
+                else:
+                    raise Modem.MissingModem()
 
-            elif index is None:
-                raise Modem.MissingIndex()
 
         @classmethod
         def set(cls, number, text, delivery_report=None, validity=None, data=None):
@@ -385,6 +386,10 @@ class Modem():
 
             self.SMS(self)
             self.USSD(self)
+        except Modem.MissingModem as error:
+            raise Modem.MissingModem()
+        except Modem.MissingIndex as error:
+            raise Modem.MissingIndex()
         except Exception as error:
             raise Exception(error)
 
