@@ -7,6 +7,7 @@
 import traceback
 import subprocess
 import re
+import logging
 from subprocess import Popen, PIPE
 
 import enum
@@ -69,14 +70,20 @@ class Modem():
                 if _type == expected:
                     return index
 
-            data=None
+            shell=False
+            data=[]
             sms_list = []
             sms_list += cls.modem.query_command + ["--messaging-list-sms"]
             if _filter is not None:
                 sms_list[1] = sms_list[1].replace('K', '')
+                sms_list += ["|", "grep", f'"{_filter}"']
+                sms_list = ' '.join(sms_list)
+                shell=True
             try: 
                 mmcli_output = subprocess.check_output(sms_list, 
+                        shell=shell,
                         stderr=subprocess.STDOUT).decode('unicode_escape')
+
                 if _filter is not None:
                     data = Modem.SMS.sms_index_type_parser(mmcli_output)
                     cats = []
@@ -87,12 +94,16 @@ class Modem():
                     data = cats
                 else:
                     data = Modem.index_value_parser(mmcli_output)
-                    return data
 
             except subprocess.CalledProcessError as error:
+                # logging.info("OUTPUT: %s", error.output)
+                if error.output == b'':
+                    return data
                 raise error
             except Exception as error:
                 raise error
+
+            return data
 
         @classmethod
         def __build_attributes(cls, data):
@@ -173,19 +184,16 @@ class Modem():
         # SMS:__init__
         @classmethod
         def __init__(cls, modem=None, index=None):
-            if modem is not None:
-                cls.modem = modem
-            if index is not None:
-                cls.index = index
-                cls.query_command = ["mmcli", "-Ks", cls.index]
-                cls.__extract_message__()
-
             if modem is None:
-                if index is None:
-                    raise Modem.MissingIndex()
+                if not index is None:
+                    cls.index = index
+                    cls.query_command = ["mmcli", "-Ks", cls.index]
+                    cls.__extract_message__()
                 else:
-                    raise Modem.MissingModem()
+                    raise Modem.MissingIndex()
 
+            else:
+                cls.modem = modem
 
         @classmethod
         def set(cls, number, text, delivery_report=None, validity=None, data=None):
