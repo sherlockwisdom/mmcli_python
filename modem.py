@@ -368,7 +368,10 @@ class Modem():
                 indexes.append(index)
 
         return indexes
-    
+
+    @staticmethod
+    def gl_index_value_parser(data:str)->str:
+        return data.split('/')[-1]
 
     def __build_attributes__(self, data):
         '''look into
@@ -384,6 +387,7 @@ class Modem():
         self.operator_code = data["modem.3gpp.operator-code"]
         self.operator_name = data["modem.3gpp.operator-name"]
         self.manufacturer = data["modem.generic.manufacturer"]
+        self.sim_index = Modem.gl_index_value_parser(data["modem.generic.sim"])
 
     # MODEM:__init__
     def __init__(self, index):
@@ -433,5 +437,22 @@ class Modem():
             query_command = self.query_command + ['-r']
             mmcli_output = subprocess.check_output(query_command, 
                     stderr=subprocess.STDOUT).decode('unicode_escape')
+        except subprocess.CalledProcessError as error:
+            raise error
+
+    def get_sim_imsi(self):
+        ''' this only works if ModemManager --debug ''' 
+        try:
+            # sudo mmcli -m 4 --command=AT+CIMI
+            # query_command = self.query_command + ["--command=AT+CIMI"]
+            query_command = self.query_command + ["-i", self.sim_index]
+            mmcli_output = subprocess.check_output(query_command, 
+                    stderr=subprocess.STDOUT).decode('unicode_escape')
+            # return mmcli_output.split(" '")[1][0:-2]
+
+            sim_data = Modem.key_value_parser(mmcli_output)
+            # logging.debug("%s", sim_data)
+            return sim_data['sim.properties.imsi']
+
         except subprocess.CalledProcessError as error:
             raise error
