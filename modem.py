@@ -216,7 +216,8 @@ class Modem():
             mmcli_send = cls.modem.query_command + \
                     ["-s", cls.index, "--send", f"--timeout={timeout}"] 
             try: 
-                return subprocess.check_output(mmcli_send, 
+                return subprocess.check_output(
+                        mmcli_send, 
                         stderr=subprocess.STDOUT).decode('unicode_escape').replace('\n', '')
             except subprocess.CalledProcessError as error:
                 raise error
