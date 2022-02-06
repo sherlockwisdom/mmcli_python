@@ -64,8 +64,8 @@ class Modem():
                     cats[secs[-2].split('/')[-1]] = secs[-1].replace('(', '').replace(')', '')
             return cats
 
-        @classmethod
-        def list(cls, _filter=None):
+        
+        def list(self, _filter=None):
             def filter_type(index, _type, expected):
                 if _type == expected:
                     return index
@@ -73,7 +73,7 @@ class Modem():
             shell=False
             data=[]
             sms_list = []
-            sms_list += cls.modem.query_command + ["--messaging-list-sms"]
+            sms_list += self.modem.query_command + ["--messaging-list-sms"]
             if _filter is not None:
                 sms_list[1] = sms_list[1].replace('K', '')
                 sms_list += ["|", "grep", f'"{_filter}"']
@@ -105,13 +105,13 @@ class Modem():
 
             return data
 
-        @classmethod
-        def __build_attributes(cls, data):
-            cls.text = data["sms.content.text"]
-            cls.state = data["sms.properties.state"]
-            cls.number = data["sms.content.number"]
-            cls.timestamp = data["sms.properties.timestamp"]
-            cls.pdu_type = data["sms.properties.pdu-type"]
+        
+        def __build_attributes(self, data):
+            self.text = data["sms.content.text"]
+            self.state = data["sms.properties.state"]
+            self.number = data["sms.content.number"]
+            self.timestamp = data["sms.properties.timestamp"]
+            self.pdu_type = data["sms.properties.pdu-type"]
 
 
         @staticmethod
@@ -145,24 +145,23 @@ class Modem():
             details['sms.content.text'] = sms_text
             return details
 
-        @classmethod
-        def __extract_message__(cls):
+        
+        def __extract_message__(self):
             try: 
-                mmcli_output = subprocess.check_output(cls.query_command, 
+                mmcli_output = subprocess.check_output(self.query_command, 
                         stderr=subprocess.STDOUT, encoding='unicode_escape')
 
                 data = Modem.SMS.sms_key_value_parser(mmcli_output)
-                cls.__build_attributes(data)
+                self.__build_attributes(data)
 
             except subprocess.CalledProcessError as error:
                 raise error
             except Exception as error:
                 raise error
 
-        @classmethod
-        def __create__(cls, number, text, delivery_report):
+        def __create__(self, number, text, delivery_report):
             mmcli_create_sms = []
-            mmcli_create_sms += cls.modem.query_command + ["--messaging-create-sms"]
+            mmcli_create_sms += self.modem.query_command + ["--messaging-create-sms"]
             mmcli_create_sms[-1] += f'=number={number},text="{text}"'
             try: 
                 mmcli_output = subprocess.check_output(mmcli_create_sms, 
@@ -174,7 +173,7 @@ class Modem():
                 if not sms_index.isdigit():
                     raise Modem.MissingIndex()
                 else:
-                    cls.index = sms_index
+                    self.index = sms_index
 
             except subprocess.CalledProcessError as error:
                 raise error
@@ -182,39 +181,39 @@ class Modem():
                 raise error
 
         # SMS:__init__
-        @classmethod
-        def __init__(cls, modem=None, index=None):
+        def __init__(self, modem=None, index=None):
             if modem is None:
                 if not index is None:
-                    cls.index = index
-                    cls.query_command = ["mmcli", "-Ks", cls.index]
-                    cls.__extract_message__()
+                    self.index = index
+                    self.query_command = ["mmcli", "-Ks", self.index]
+                    self.__extract_message__()
                 else:
                     raise Modem.MissingIndex()
 
             else:
-                cls.modem = modem
+                self.modem = modem
 
-        @classmethod
-        def set(cls, number, text, delivery_report=None, validity=None, data=None):
-            cls.number = number
-            cls.text = text
-            cls.delivery_report=delivery_report
-            cls.validity=validity
-            cls.data=data
+        
+        def set(self, number, text, delivery_report=None, validity=None, data=None):
+            self.number = number
+            self.text = text
+            self.delivery_report=delivery_report
+            self.validity=validity
+            self.data=data
 
-            if cls.__create__(number, text, delivery_report):
-                cls._set=True
+            if self.__create__(number, text, delivery_report):
+                self._set=True
             
-            return cls
+            return self
 
-        @classmethod
-        def send(cls, timeout=20):
-            if cls.index is None:
+        
+        def send(self, timeout=20):
+            if self.index is None:
                 raise Modem.MissingIndex()
 
-            mmcli_send = cls.modem.query_command + \
-                    ["-s", cls.index, "--send", f"--timeout={timeout}"] 
+            mmcli_send = self.modem.query_command + \
+                    ["-s", self.index, "--send", f"--timeout={timeout}"] 
+            logging.debug("query command: %s", mmcli_send)
             try: 
                 return subprocess.check_output(
                         mmcli_send, 
@@ -222,10 +221,9 @@ class Modem():
             except subprocess.CalledProcessError as error:
                 raise error
 
-        @classmethod
-        def delete(cls, index):
+        def delete(self, index):
             command = []
-            command = cls.modem.query_command + [f"--messaging-delete-sms={index}"] 
+            command = self.modem.query_command + [f"--messaging-delete-sms={index}"] 
             try: 
                return subprocess.check_output(command, 
                        stderr=subprocess.STDOUT).decode('unicode_escape').replace('\n', '')
@@ -253,13 +251,13 @@ class Modem():
                 self.output = output
                 super().__init__()
 
-        @classmethod
-        def get_exception(cls, command, output):
+        
+        def get_exception(self, command, output):
             exception_wrongstate_activesession = \
                     'GDBus.Error:org.freedesktop.ModemManager1.Error.Core.WrongState: ' + \
                     'Cannot initiate USSD: a session is already active'
             if str(output).find(exception_wrongstate_activesession) > -1:
-                return cls.ActiveSession(command, output)
+                return self.ActiveSession(command, output)
 
             exception_wrongstate_cannotinitiateussd = \
                 'GDBus.Error:org.freedesktop.ModemManager1.Error.Core.WrongState: ' + \
@@ -268,17 +266,17 @@ class Modem():
                     'GDBus.Error:org.freedesktop.ModemManager1.Error.Core.Aborted'
             if str(output).find(exception_wrongstate_cannotinitiateussd) > -1 or \
                     str(output).find(exception_error_core_aborted) > -1:
-                return cls.CannotInitiateUSSD(command, output)
+                return self.CannotInitiateUSSD(command, output)
 
-            return cls.UnknownError(command, output)
+            return self.UnknownError(command, output)
 
-        @classmethod
-        def __init__(cls, modem):
-            cls.modem = modem
+        
+        def __init__(self, modem):
+            self.modem = modem
 
-        @classmethod
-        def initiate(cls, command, timeout=60):
-            query_command = cls.modem.query_command
+        
+        def initiate(self, command, timeout=60):
+            query_command = self.modem.query_command
             query_command[1] = query_command[1].replace('K', '')
             ussd_command = query_command + [f'--3gpp-ussd-initiate={command}', f'--timeout={timeout}']
             try: 
@@ -288,11 +286,11 @@ class Modem():
                 mmcli_output = mmcli_output.split(": ", 1)[1].split("'")[1]
                 return mmcli_output
             except subprocess.CalledProcessError as error:
-                raise cls.get_exception(command=error.cmd, output=error.output)
+                raise self.get_exception(command=error.cmd, output=error.output)
 
-        @classmethod
-        def respond(cls, command, timeout=60):
-            query_command = cls.modem.query_command
+        
+        def respond(self, command, timeout=60):
+            query_command = self.modem.query_command
             query_command[1] = query_command[1].replace('K', '')
             ussd_command = query_command + [f'--3gpp-ussd-respond={command}']
             try: 
@@ -302,9 +300,9 @@ class Modem():
             except subprocess.CalledProcessError as error:
                 raise error
 
-        @classmethod
-        def cancel(cls):
-            ussd_command = cls.modem.query_command + [f"--3gpp-ussd-cancel"]
+        
+        def cancel(self):
+            ussd_command = self.modem.query_command + [f"--3gpp-ussd-cancel"]
             try: 
                 mmcli_output = subprocess.check_output(ussd_command, 
                         stderr=subprocess.STDOUT).decode('unicode_escape')
@@ -313,9 +311,8 @@ class Modem():
                 consequences '''
                 pass
 
-        @classmethod
-        def status(cls):
-            ussd_command = cls.modem.query_command + [f"--3gpp-ussd-status"]
+        def status(self):
+            ussd_command = self.modem.query_command + [f"--3gpp-ussd-status"]
 
             try: 
                 mmcli_output = subprocess.check_output(ussd_command, 
@@ -397,8 +394,8 @@ class Modem():
             self.index = index
             self.refresh()
 
-            self.SMS(self)
-            self.USSD(self)
+            self.sms = self.SMS(self)
+            self.ussd = self.USSD(self)
         except Modem.MissingModem as error:
             raise Modem.MissingModem()
         except Modem.MissingIndex as error:
