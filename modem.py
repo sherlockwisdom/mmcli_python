@@ -77,8 +77,8 @@ class Modem():
             if _filter is not None:
                 sms_list[1] = sms_list[1].replace('K', '')
                 sms_list += ["|", "grep", f'"{_filter}"']
-                sms_list = ' '.join(sms_list)
-                shell=True
+                # sms_list = ' '.join(sms_list)
+                # shell=True
             try: 
                 mmcli_output = subprocess.check_output(sms_list, 
                         shell=shell,
